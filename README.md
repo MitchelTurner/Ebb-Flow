@@ -102,10 +102,28 @@ If you ever see `relation "subscribers" does not exist`, redeploy the web servic
 
 ## Editorial workflow
 
-1. In Admin → **Emails**, create a draft issue and add up to 6 stories.
-2. Track prep work in **Tasks**.
-3. Preview the issue, set status to **ready**, then **Send now** (or wait for cron).
-4. After send, status becomes `sent`.
+1. In Admin → **Emails**, create a draft issue.
+2. For each story, paste raw updates into **Source notes** and save (title can be a stub).
+3. Click **Write with Claude** to draft subject, preheader, intro, coming-up, and polished story copy from those notes.
+4. Preview, set status to **ready**, then **Send now** (or wait for cron).
+5. After send, status becomes `sent`.
+
+### Claude auto-write
+
+Set on Railway:
+
+```bash
+AI-KEY=sk-ant-...
+# optional:
+# ANTHROPIC_MODEL=claude-sonnet-4-20250514
+# ANTHROPIC_AUTO_WRITE=true   # rewrite issue whenever a story with source_notes is saved
+```
+
+CLI:
+
+```bash
+npm run generate -- --issue=<issue-uuid>
+```
 
 ## Template tags
 

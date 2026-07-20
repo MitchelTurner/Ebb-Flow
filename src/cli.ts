@@ -8,6 +8,7 @@ import {
   getStories,
   runSqlFile,
 } from "./db.js";
+import { generateAndSaveIssue } from "./generate.js";
 import { renderIssueEmail } from "./render.js";
 import { sendNewsletter } from "./send.js";
 import { startServer } from "./server.js";
@@ -68,6 +69,31 @@ async function main(): Promise<void> {
         console.log(`Wrote ${out} (${html.length} bytes)`);
         break;
       }
+      case "generate": {
+        const config = getConfig();
+        const issueId =
+          args.find((a) => a.startsWith("--issue="))?.slice("--issue=".length) ??
+          config.issueId;
+        if (!issueId) {
+          throw new Error("Pass --issue=<uuid> or set ISSUE_ID");
+        }
+        const result = await generateAndSaveIssue(config, issueId);
+        console.log(
+          JSON.stringify(
+            {
+              model: result.model,
+              subject: result.issue.subject,
+              stories: result.stories.map((s) => ({
+                position: s.position,
+                title: s.title,
+              })),
+            },
+            null,
+            2
+          )
+        );
+        break;
+      }
       case "serve": {
         const config = getConfig();
         await startServer(config);
@@ -95,6 +121,7 @@ Commands:
   migrate              Apply sql/schema.sql
   seed                 Apply sql/seed.sql
   preview [--issue=ID] Render latest/ready issue HTML to .preview/
+  generate --issue=ID  Use Claude to rewrite issue + stories from source notes
   send [--issue=ID] [--dry-run]
                        Auto-fill template from Postgres and send via Resend
   serve                HTTP server (preview, unsubscribe, /cron/send)

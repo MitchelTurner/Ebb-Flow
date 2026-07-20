@@ -259,13 +259,16 @@ export async function deleteIssue(databaseUrl: string, id: string): Promise<bool
   return (rowCount ?? 0) > 0;
 }
 
+const STORY_SELECT = `id, issue_id, position, toc_title, title, eyebrow, summary,
+  why_it_matters, url, image_url, quote, quote_attribution,
+  COALESCE(source_notes, '') AS source_notes`;
+
 export async function getStories(
   databaseUrl: string,
   issueId: string
 ): Promise<Story[]> {
   const { rows } = await getPool(databaseUrl).query<Story>(
-    `SELECT id, issue_id, position, toc_title, title, eyebrow, summary,
-            why_it_matters, url, image_url, quote, quote_attribution
+    `SELECT ${STORY_SELECT}
      FROM stories
      WHERE issue_id = $1
      ORDER BY position ASC`,
@@ -279,6 +282,8 @@ export async function upsertStory(
   issueId: string,
   input: Omit<Story, "id" | "issue_id"> & { id?: string }
 ): Promise<Story> {
+  const sourceNotes = input.source_notes ?? "";
+
   if (input.id) {
     const { rows } = await getPool(databaseUrl).query<Story>(
       `UPDATE stories SET
@@ -291,10 +296,10 @@ export async function upsertStory(
          url = $9,
          image_url = $10,
          quote = $11,
-         quote_attribution = $12
+         quote_attribution = $12,
+         source_notes = $13
        WHERE id = $1 AND issue_id = $2
-       RETURNING id, issue_id, position, toc_title, title, eyebrow, summary,
-                 why_it_matters, url, image_url, quote, quote_attribution`,
+       RETURNING ${STORY_SELECT}`,
       [
         input.id,
         issueId,
@@ -308,6 +313,7 @@ export async function upsertStory(
         input.image_url,
         input.quote,
         input.quote_attribution,
+        sourceNotes,
       ]
     );
     if (!rows[0]) throw new Error("Story not found");
@@ -317,8 +323,8 @@ export async function upsertStory(
   const { rows } = await getPool(databaseUrl).query<Story>(
     `INSERT INTO stories (
        issue_id, position, toc_title, title, eyebrow, summary,
-       why_it_matters, url, image_url, quote, quote_attribution
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       why_it_matters, url, image_url, quote, quote_attribution, source_notes
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      ON CONFLICT (issue_id, position) DO UPDATE SET
        toc_title = EXCLUDED.toc_title,
        title = EXCLUDED.title,
@@ -328,9 +334,9 @@ export async function upsertStory(
        url = EXCLUDED.url,
        image_url = EXCLUDED.image_url,
        quote = EXCLUDED.quote,
-       quote_attribution = EXCLUDED.quote_attribution
-     RETURNING id, issue_id, position, toc_title, title, eyebrow, summary,
-               why_it_matters, url, image_url, quote, quote_attribution`,
+       quote_attribution = EXCLUDED.quote_attribution,
+       source_notes = EXCLUDED.source_notes
+     RETURNING ${STORY_SELECT}`,
     [
       issueId,
       input.position,
@@ -343,6 +349,7 @@ export async function upsertStory(
       input.image_url,
       input.quote,
       input.quote_attribution,
+      sourceNotes,
     ]
   );
   return rows[0];

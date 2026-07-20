@@ -26,6 +26,11 @@ export function getConfig() {
     fromEmail: optional("FROM_EMAIL") ?? "The Ebb & Flow <onboarding@resend.dev>",
     appUrl: (optional("APP_URL") ?? "http://localhost:3000").replace(/\/$/, ""),
     adminPassword: optional("ADMIN_PASSWORD"),
+    anthropicApiKey: optional("AI-KEY") ?? optional("ANTHROPIC_API_KEY"),
+    anthropicModel:
+      optional("ANTHROPIC_MODEL") ?? "claude-sonnet-4-20250514",
+    /** When true, saving a story with source_notes triggers Claude rewrite of that issue. */
+    anthropicAutoWrite: bool("ANTHROPIC_AUTO_WRITE", false),
     issueId: optional("ISSUE_ID"),
     dryRun: bool("DRY_RUN", false),
     maxRecipients: process.env.MAX_RECIPIENTS
