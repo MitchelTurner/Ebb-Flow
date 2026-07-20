@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS transcripts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Existing transcripts/findings tables may predate app columns.
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS content TEXT NOT NULL DEFAULT '';
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT '';
@@ -97,7 +98,6 @@ ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMPTZ NOT NUL
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS used_in_issue_id UUID REFERENCES issues(id) ON DELETE SET NULL;
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
--- Raw findings may also predate the app schema.
 ALTER TABLE findings ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
 ALTER TABLE findings ADD COLUMN IF NOT EXISTS body TEXT NOT NULL DEFAULT '';
 ALTER TABLE findings ADD COLUMN IF NOT EXISTS source_url TEXT NOT NULL DEFAULT '';
