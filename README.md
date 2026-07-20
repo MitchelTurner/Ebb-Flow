@@ -22,11 +22,15 @@ cp .env.example .env
 # fill DATABASE_URL, RESEND_API_KEY, FROM_EMAIL, APP_URL, ADMIN_PASSWORD
 ```
 
-4. Install and migrate:
+4. Install:
 
 ```bash
 npm install
-npm run db:migrate
+```
+
+The web server applies `sql/schema.sql` automatically on startup. Optional seed data:
+
+```bash
 npm run db:seed
 ```
 
@@ -35,7 +39,7 @@ npm run db:seed
 ```bash
 npm run serve
 # open http://localhost:3000        → subscribe
-# open http://localhost:3000/admin  → manage
+# open http://localhost:3000/admin  → manage (unlisted)
 ```
 
 6. Dry-run / real send:
@@ -85,15 +89,16 @@ Also:
 
 1. Deploy this repo; attach Postgres.
 2. Set env vars from `.env.example` (**include `ADMIN_PASSWORD`**).
-3. Run once in Railway shell:
+3. Schema is applied automatically when the web service starts. Optional sample data:
 
 ```bash
-npm run db:migrate
 npm run db:seed
 ```
 
 4. Open your public URL to subscribe. Admin is unlisted at `/admin` (not linked from the site).
 5. Optional cron service: `npm run start:send` on `0 15 * * 1`.
+
+If you ever see `relation "subscribers" does not exist`, redeploy the web service (or run `npm run db:migrate` in Railway shell).
 
 ## Editorial workflow
 

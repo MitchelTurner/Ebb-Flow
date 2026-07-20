@@ -8,6 +8,7 @@ import {
   getIssueForSend,
   getStories,
   getSubscriberByToken,
+  runSqlFile,
   unsubscribeByToken,
 } from "./db.js";
 import { renderIssueEmail } from "./render.js";
@@ -189,10 +190,20 @@ export function createServer(config: AppConfig) {
   return app;
 }
 
+export async function ensureSchema(databaseUrl: string): Promise<void> {
+  console.log("Applying database schema...");
+  await runSqlFile(databaseUrl, "sql/schema.sql");
+  console.log("Database schema ready.");
+}
+
 export async function startServer(config: AppConfig): Promise<void> {
   if (!existsSync(publicDir)) {
     console.warn(`Warning: public directory not found at ${publicDir}`);
   }
+
+  // Schema uses IF NOT EXISTS, so this is safe on every boot.
+  await ensureSchema(config.databaseUrl);
+
   const app = createServer(config);
   await new Promise<void>((resolve) => {
     app.listen(config.port, () => {
