@@ -19,7 +19,9 @@ export async function generateAndSaveIssue(
   issueId: string
 ): Promise<GenerateResult> {
   if (!config.anthropicApiKey) {
-    throw new Error("AI-KEY is not set");
+    throw new Error(
+      "Claude API key is not set. Add AI_KEY (recommended) or AI-KEY on the Railway web service, then redeploy."
+    );
   }
 
   const issue = await getIssueForSend(config.databaseUrl, issueId);

@@ -47,7 +47,11 @@ export function createApiRouter(config: AppConfig): Router {
   const guard = requireAdmin(adminPassword);
 
   router.get("/health", (_req, res) => {
-    res.json({ ok: true, service: "ebb-flow-newsletter" });
+    res.json({
+      ok: true,
+      service: "ebb-flow-newsletter",
+      aiKeyConfigured: Boolean(config.anthropicApiKey),
+    });
   });
 
   router.post("/subscribe", async (req, res) => {
