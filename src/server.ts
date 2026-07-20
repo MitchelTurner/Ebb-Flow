@@ -31,6 +31,7 @@ export function createServer(config: AppConfig) {
       ok: true,
       service: "ebb-flow-newsletter",
       publicDirExists: existsSync(publicDir),
+      aiKeyConfigured: Boolean(config.anthropicApiKey),
     });
   });
 

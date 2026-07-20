@@ -113,10 +113,12 @@ If you ever see `relation "subscribers" does not exist`, redeploy the web servic
 Set on Railway:
 
 ```bash
-AI-KEY=sk-ant-...
+AI_KEY=sk-ant-...          # preferred (underscore). AI-KEY also accepted.
 AUTO_DRAFT_FROM_FINDINGS=true
 # FINDINGS_BATCH_SIZE=6
 ```
+
+Check `/health` → `aiKeyConfigured: true` after redeploy. If false, the key isn’t on the **web** service (or the name doesn’t match).
 
 Drafting always uses **Claude Fable 5** (`claude-fable-5`) — the model is not configurable.
 

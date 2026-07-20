@@ -26,7 +26,8 @@ export async function autoDraftFromNewestFindings(
   if (!config.anthropicApiKey) {
     return {
       drafted: false,
-      reason: "AI-KEY is not set",
+      reason:
+        "Claude API key is not set. Add AI_KEY (recommended) or AI-KEY on the Railway web service, then redeploy.",
       findingCount: 0,
     };
   }

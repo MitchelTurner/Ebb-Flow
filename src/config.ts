@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 function required(name: string): string {
-  const value = process.env[name]?.trim();
+  const value = readEnv(name);
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
@@ -9,12 +9,52 @@ function required(name: string): string {
 }
 
 function optional(name: string): string | undefined {
-  const value = process.env[name]?.trim();
+  return readEnv(name);
+}
+
+/** Read env values, trimming whitespace and surrounding quotes. */
+function readEnv(name: string): string | undefined {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null) return undefined;
+  let value = String(raw).trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1).trim();
+  }
   return value || undefined;
 }
 
+/**
+ * Claude / Anthropic key aliases.
+ * Prefer AI_KEY (underscore) — some hosts mishandle hyphenated names like AI-KEY.
+ */
+export const AI_KEY_ENV_NAMES = [
+  "AI_KEY",
+  "AI-KEY",
+  "ANTHROPIC_API_KEY",
+  "CLAUDE_API_KEY",
+] as const;
+
+export function resolveAnthropicApiKey(): string | undefined {
+  for (const name of AI_KEY_ENV_NAMES) {
+    const value = readEnv(name);
+    if (value) return value;
+  }
+
+  // Last resort: any env key that looks like AI-KEY / AI_KEY ignoring case.
+  for (const [key, raw] of Object.entries(process.env)) {
+    if (!/^(ai[-_]?key|anthropic_api_key|claude_api_key)$/i.test(key)) continue;
+    const value = readEnv(key);
+    if (value) return value;
+  }
+
+  return undefined;
+}
+
 function bool(name: string, fallback = false): boolean {
-  const value = process.env[name]?.trim().toLowerCase();
+  const value = readEnv(name)?.toLowerCase();
   if (value === undefined || value === "") return fallback;
   return ["1", "true", "yes", "on"].includes(value);
 }
@@ -26,7 +66,7 @@ export function getConfig() {
     fromEmail: optional("FROM_EMAIL") ?? "The Ebb & Flow <onboarding@resend.dev>",
     appUrl: (optional("APP_URL") ?? "http://localhost:3000").replace(/\/$/, ""),
     adminPassword: optional("ADMIN_PASSWORD"),
-    anthropicApiKey: optional("AI-KEY") ?? optional("ANTHROPIC_API_KEY"),
+    anthropicApiKey: resolveAnthropicApiKey(),
     /** Always Claude Fable 5 — not overridable. */
     anthropicModel: "claude-fable-5" as const,
     /** When true, saving a story with source_notes triggers Claude rewrite of that issue. */
