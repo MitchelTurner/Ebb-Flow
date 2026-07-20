@@ -1,0 +1,140 @@
+import { Resend } from "resend";
+import type { AppConfig } from "./config.js";
+import {
+  getActiveSubscribers,
+  getIssueForSend,
+  getStories,
+  markIssueSending,
+  markIssueSent,
+  recordSend,
+} from "./db.js";
+import { loadTemplate, renderIssueEmail } from "./render.js";
+
+export interface SendResult {
+  issueId: string;
+  attempted: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  dryRun: boolean;
+}
+
+export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
+  const issue = await getIssueForSend(config.databaseUrl, config.issueId);
+  if (!issue) {
+    throw new Error(
+      config.issueId
+        ? `Issue not found: ${config.issueId}`
+        : "No issue with status 'ready' found"
+    );
+  }
+
+  if (!["ready", "sending"].includes(issue.status) && !config.dryRun) {
+    throw new Error(
+      `Issue ${issue.id} has status '${issue.status}' (expected ready)`
+    );
+  }
+
+  const stories = await getStories(config.databaseUrl, issue.id);
+  if (stories.length === 0) {
+    throw new Error(`Issue ${issue.id} has no stories`);
+  }
+
+  const subscribers = await getActiveSubscribers(
+    config.databaseUrl,
+    config.maxRecipients
+  );
+  if (subscribers.length === 0) {
+    throw new Error("No active subscribers to send to");
+  }
+
+  const template = loadTemplate();
+  const result: SendResult = {
+    issueId: issue.id,
+    attempted: subscribers.length,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    dryRun: config.dryRun,
+  };
+
+  if (!config.dryRun) {
+    if (!config.resendApiKey) {
+      throw new Error("RESEND_API_KEY is required unless DRY_RUN=true");
+    }
+    await markIssueSending(config.databaseUrl, issue.id);
+  }
+
+  const resend = config.dryRun ? null : new Resend(config.resendApiKey);
+
+  for (const subscriber of subscribers) {
+    const html = renderIssueEmail({
+      issue,
+      stories,
+      subscriber,
+      appUrl: config.appUrl,
+      template,
+    });
+
+    if (config.dryRun) {
+      console.log(
+        `[dry-run] Would send to ${subscriber.email} (${html.length} bytes) subject="${issue.subject}"`
+      );
+      await recordSend({
+        databaseUrl: config.databaseUrl,
+        issueId: issue.id,
+        subscriberId: subscriber.id,
+        providerId: null,
+        status: "skipped",
+        error: "dry_run",
+      });
+      result.skipped += 1;
+      continue;
+    }
+
+    try {
+      const { data, error } = await resend!.emails.send({
+        from: config.fromEmail,
+        to: subscriber.email,
+        subject: issue.subject,
+        html,
+        headers: {
+          "List-Unsubscribe": `<${config.appUrl}/unsubscribe/${subscriber.unsubscribe_token}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      await recordSend({
+        databaseUrl: config.databaseUrl,
+        issueId: issue.id,
+        subscriberId: subscriber.id,
+        providerId: data?.id ?? null,
+        status: "sent",
+      });
+      result.sent += 1;
+      console.log(`Sent to ${subscriber.email} (${data?.id ?? "no-id"})`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await recordSend({
+        databaseUrl: config.databaseUrl,
+        issueId: issue.id,
+        subscriberId: subscriber.id,
+        providerId: null,
+        status: "failed",
+        error: message,
+      });
+      result.failed += 1;
+      console.error(`Failed for ${subscriber.email}: ${message}`);
+    }
+  }
+
+  if (!config.dryRun && result.failed === 0) {
+    await markIssueSent(config.databaseUrl, issue.id);
+  }
+
+  return result;
+}

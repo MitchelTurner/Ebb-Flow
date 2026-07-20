@@ -1,0 +1,36 @@
+{
+  "name": "ebb-flow-newsletter",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated weekly newsletter from Railway Postgres using The Ebb & Flow template",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "send": "tsx src/cli.ts send",
+    "preview": "tsx src/cli.ts preview",
+    "serve": "tsx src/cli.ts serve",
+    "db:migrate": "tsx src/cli.ts migrate",
+    "db:seed": "tsx src/cli.ts seed",
+    "start": "node dist/cli.js serve",
+    "start:send": "node dist/cli.js send",
+    "typecheck": "tsc --noEmit",
+    "smoke": "tsx src/smoke-render.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.3",
+    "resend": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.13.10",
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

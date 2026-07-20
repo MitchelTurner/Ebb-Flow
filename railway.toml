@@ -1,0 +1,14 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm ci && npm run build"
+
+[deploy]
+startCommand = "npm run start"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+
+# Separate Railway Cron service can run:
+#   npm run start:send
+# Schedule example (Mondays 15:00 UTC ≈ 7am AKST):
+#   0 15 * * 1
