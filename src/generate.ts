@@ -19,7 +19,7 @@ export async function generateAndSaveIssue(
   issueId: string
 ): Promise<GenerateResult> {
   if (!config.anthropicApiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not set");
+    throw new Error("AI-KEY is not set");
   }
 
   const issue = await getIssueForSend(config.databaseUrl, issueId);

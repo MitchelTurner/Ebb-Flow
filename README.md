@@ -113,7 +113,7 @@ If you ever see `relation "subscribers" does not exist`, redeploy the web servic
 Set on Railway:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
+AI-KEY=sk-ant-...
 # optional:
 # ANTHROPIC_MODEL=claude-sonnet-4-20250514
 # ANTHROPIC_AUTO_WRITE=true   # rewrite issue whenever a story with source_notes is saved
