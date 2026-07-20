@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin · The Ebb &amp; Flow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <div id="login-view" class="login-wrap hidden">
+    <form class="login-box" id="login-form">
+      <h1>The Ebb &amp; Flow</h1>
+      <p>Sign in to manage subscribers, issues, and tasks.</p>
+      <label>
+        Admin password
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <div style="margin-top:0.85rem">
+        <button type="submit">Sign in</button>
+      </div>
+      <p class="flash" id="login-flash" role="status"></p>
+      <p class="muted" style="margin-top:1rem"><a href="/">← Back to subscribe page</a></p>
+    </form>
+  </div>
+
+  <div id="app-view" class="shell hidden">
+    <header class="topbar">
+      <h1 class="brand">The Ebb &amp; Flow <small>Newsroom admin</small></h1>
+      <div class="topbar-actions">
+        <a class="btn secondary" href="/" target="_blank" rel="noopener">Public site</a>
+        <button type="button" class="secondary" id="logout-btn">Log out</button>
+      </div>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Admin sections">
+      <button class="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
+      <button class="tab" type="button" data-tab="subscribers" aria-selected="false">Subscribers</button>
+      <button class="tab" type="button" data-tab="issues" aria-selected="false">Emails</button>
+      <button class="tab" type="button" data-tab="tasks" aria-selected="false">Tasks</button>
+    </nav>
+
+    <p class="flash" id="app-flash" role="status"></p>
+
+    <section id="panel-overview" class="panel" data-panel="overview">
+      <div class="stats" id="stats"></div>
+      <p class="muted">Use Emails to draft/send issues. Use Tasks for your weekly checklist.</p>
+    </section>
+
+    <section id="panel-subscribers" class="panel hidden" data-panel="subscribers">
+      <div class="section-head">
+        <h2>Subscribers</h2>
+      </div>
+      <form class="toolbar grid-form cols-3" id="add-subscriber-form">
+        <label>First name <input name="first_name" placeholder="Alex"></label>
+        <label>Email <input name="email" type="email" required placeholder="alex@example.com"></label>
+        <label>&nbsp;<button type="submit">Add subscriber</button></label>
+      </form>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="subscribers-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="panel-issues" class="panel hidden" data-panel="issues">
+      <div class="section-head">
+        <h2>Email issues</h2>
+        <button type="button" id="new-issue-btn">New issue</button>
+      </div>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Subject</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="issues-body"></tbody>
+        </table>
+      </div>
+
+      <div id="issue-editor" class="issue-editor hidden">
+        <div class="section-head">
+          <h2 id="issue-editor-title">Edit issue</h2>
+          <a class="btn secondary" id="preview-link" href="#" target="_blank" rel="noopener">Preview</a>
+        </div>
+        <form id="issue-form" class="grid-form cols-2">
+          <input type="hidden" name="id">
+          <label>Issue date <input type="date" name="issue_date" required></label>
+          <label>Status
+            <select name="status">
+              <option value="draft">draft</option>
+              <option value="ready">ready</option>
+              <option value="sending">sending</option>
+              <option value="sent">sent</option>
+            </select>
+          </label>
+          <label>Subject <input name="subject" required></label>
+          <label>Volume label <input name="volume_label" placeholder="Vol. 4, No. 29"></label>
+          <label class="cols-span">Preheader <input name="preheader"></label>
+          <label style="grid-column:1/-1">Intro <textarea name="intro"></textarea></label>
+          <label>Weather <input name="weather" placeholder="54°F · Light Rain"></label>
+          <label>High tides <input name="high_tides"></label>
+          <label>Low tides <input name="low_tides"></label>
+          <label>High tide label <input name="high_tide_label"></label>
+          <label>CTA URL <input name="cta_url"></label>
+          <label>CTA label <input name="cta_label"></label>
+          <label style="grid-column:1/-1">Coming up (one per line) <textarea name="coming_up"></textarea></label>
+          <label>Tip headline <input name="tip_headline"></label>
+          <label>Postal address <input name="postal_address"></label>
+          <label style="grid-column:1/-1">Tip body <textarea name="tip_body"></textarea></label>
+          <div style="grid-column:1/-1; display:flex; gap:0.5rem; flex-wrap:wrap">
+            <button type="submit">Save issue</button>
+            <button type="button" class="secondary" id="send-dry-btn">Dry-run send</button>
+            <button type="button" id="send-live-btn">Send now</button>
+          </div>
+        </form>
+
+        <div class="section-head" style="margin-top:1.5rem">
+          <h2>Stories</h2>
+        </div>
+        <form id="story-form" class="grid-form cols-2">
+          <input type="hidden" name="id">
+          <label>Position
+            <select name="position">
+              <option value="1">1 · Lead</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
+          </label>
+          <label>Eyebrow <input name="eyebrow" placeholder="Lead Story · Local Government"></label>
+          <label>TOC title <input name="toc_title" required></label>
+          <label>Title <input name="title" required></label>
+          <label style="grid-column:1/-1">Summary <textarea name="summary"></textarea></label>
+          <label style="grid-column:1/-1">Why it matters <input name="why_it_matters"></label>
+          <label>URL <input name="url"></label>
+          <label>Image URL (lead) <input name="image_url"></label>
+          <label>Quote <input name="quote"></label>
+          <label>Quote attribution <input name="quote_attribution"></label>
+          <div style="grid-column:1/-1">
+            <button type="submit">Save story</button>
+          </div>
+        </form>
+        <div class="story-list" id="stories-list"></div>
+      </div>
+    </section>
+
+    <section id="panel-tasks" class="panel hidden" data-panel="tasks">
+      <div class="section-head">
+        <h2>Tasks</h2>
+      </div>
+      <form id="task-form" class="grid-form cols-3">
+        <label>Title <input name="title" required placeholder="Write lead story"></label>
+        <label>Due date <input type="date" name="due_date"></label>
+        <label>Status
+          <select name="status">
+            <option value="todo">todo</option>
+            <option value="doing">doing</option>
+            <option value="done">done</option>
+          </select>
+        </label>
+        <label style="grid-column:1/-1">Notes <textarea name="notes" placeholder="Optional details"></textarea></label>
+        <div><button type="submit">Add task</button></div>
+      </form>
+      <div class="task-board" id="task-board"></div>
+    </section>
+  </div>
+
+  <script src="/admin/admin.js" type="module"></script>
+</body>
+</html>

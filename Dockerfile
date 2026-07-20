@@ -9,6 +9,7 @@ COPY tsconfig.json ./
 COPY src ./src
 COPY sql ./sql
 COPY templates ./templates
+COPY public ./public
 
 RUN npm run build && npm prune --omit=dev
 

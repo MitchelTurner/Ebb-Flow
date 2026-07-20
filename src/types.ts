@@ -1,6 +1,7 @@
 export type SubscriberStatus = "active" | "unsubscribed" | "bounced";
 export type IssueStatus = "draft" | "ready" | "sending" | "sent";
 export type SendStatus = "queued" | "sent" | "failed" | "skipped";
+export type TaskStatus = "todo" | "doing" | "done";
 
 export interface Subscriber {
   id: string;
@@ -8,6 +9,8 @@ export interface Subscriber {
   first_name: string | null;
   status: SubscriberStatus;
   unsubscribe_token: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Issue {
@@ -28,6 +31,9 @@ export interface Issue {
   tip_body: string;
   postal_address: string;
   status: IssueStatus;
+  created_at?: string;
+  updated_at?: string;
+  sent_at?: string | null;
 }
 
 export interface Story {
@@ -45,4 +51,23 @@ export interface Story {
   quote_attribution: string | null;
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  notes: string;
+  status: TaskStatus;
+  due_date: string | null;
+  issue_id: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export type TemplateData = Record<string, string>;
+
+export interface DashboardStats {
+  active_subscribers: number;
+  total_subscribers: number;
+  draft_issues: number;
+  ready_issues: number;
+  open_tasks: number;
+}

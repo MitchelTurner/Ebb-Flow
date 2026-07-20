@@ -1,4 +1,7 @@
 import express from "express";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createApiRouter } from "./api.js";
 import type { AppConfig } from "./config.js";
 import {
   getIssueForSend,
@@ -9,10 +12,14 @@ import {
 import { renderIssueEmail } from "./render.js";
 import { sendNewsletter } from "./send.js";
 
+const publicDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
+
 export function createServer(config: AppConfig) {
   const app = express();
   app.use(express.urlencoded({ extended: false }));
   app.use(express.json());
+
+  app.use("/api", createApiRouter(config));
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "ebb-flow-newsletter" });
@@ -122,7 +129,6 @@ export function createServer(config: AppConfig) {
     }
   });
 
-  // Manual / cron trigger. Protect with CRON_SECRET when set.
   app.post("/cron/send", async (req, res) => {
     const secret = process.env.CRON_SECRET?.trim();
     if (secret) {
@@ -140,6 +146,12 @@ export function createServer(config: AppConfig) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ ok: false, error: message });
     }
+  });
+
+  app.use(express.static(publicDir));
+
+  app.get(["/admin", "/admin/"], (_req, res) => {
+    res.sendFile(join(publicDir, "admin", "index.html"));
   });
 
   return app;

@@ -1,0 +1,402 @@
+import { Router } from "express";
+import type { AppConfig } from "./config.js";
+import {
+  clearAdminCookie,
+  isAdminAuthenticated,
+  requireAdmin,
+  setAdminCookie,
+  verifyAdminPassword,
+} from "./auth.js";
+import {
+  createIssue,
+  createTask,
+  deleteIssue,
+  deleteStory,
+  deleteSubscriber,
+  deleteTask,
+  getDashboardStats,
+  getStories,
+  listIssues,
+  listSubscribers,
+  listTasks,
+  subscribe,
+  updateIssue,
+  updateSubscriberStatus,
+  updateTask,
+  upsertStory,
+} from "./db.js";
+import { sendNewsletter } from "./send.js";
+import type { IssueStatus, SubscriberStatus, TaskStatus } from "./types.js";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function badRequest(res: import("express").Response, message: string): void {
+  res.status(400).json({ error: message });
+}
+
+export function createApiRouter(config: AppConfig): Router {
+  const router = Router();
+  const adminPassword = config.adminPassword;
+  const guard = requireAdmin(adminPassword);
+
+  router.get("/health", (_req, res) => {
+    res.json({ ok: true, service: "ebb-flow-newsletter" });
+  });
+
+  router.post("/subscribe", async (req, res) => {
+    try {
+      const email = String(req.body?.email ?? "").trim().toLowerCase();
+      const firstName = String(req.body?.first_name ?? "").trim() || null;
+      if (!EMAIL_RE.test(email)) {
+        badRequest(res, "Enter a valid email address.");
+        return;
+      }
+      const subscriber = await subscribe(config.databaseUrl, email, firstName);
+      res.status(201).json({
+        ok: true,
+        subscriber: {
+          email: subscriber.email,
+          first_name: subscriber.first_name,
+          status: subscriber.status,
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.get("/admin/session", (req, res) => {
+    if (!adminPassword) {
+      res.json({ authenticated: false, configured: false });
+      return;
+    }
+    res.json({
+      authenticated: isAdminAuthenticated(req, adminPassword),
+      configured: true,
+    });
+  });
+
+  router.post("/admin/login", (req, res) => {
+    if (!adminPassword) {
+      res.status(503).json({
+        error: "Admin is not configured. Set ADMIN_PASSWORD in the environment.",
+      });
+      return;
+    }
+    const password = String(req.body?.password ?? "");
+    if (!verifyAdminPassword(password, adminPassword)) {
+      res.status(401).json({ error: "Incorrect password." });
+      return;
+    }
+    setAdminCookie(res, adminPassword);
+    res.json({ ok: true });
+  });
+
+  router.post("/admin/logout", (_req, res) => {
+    clearAdminCookie(res);
+    res.json({ ok: true });
+  });
+
+  router.get("/admin/stats", guard, async (_req, res) => {
+    try {
+      const stats = await getDashboardStats(config.databaseUrl);
+      res.json({ stats });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.get("/admin/subscribers", guard, async (_req, res) => {
+    try {
+      const subscribers = await listSubscribers(config.databaseUrl);
+      res.json({ subscribers });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/admin/subscribers", guard, async (req, res) => {
+    try {
+      const email = String(req.body?.email ?? "").trim().toLowerCase();
+      const firstName = String(req.body?.first_name ?? "").trim() || null;
+      if (!EMAIL_RE.test(email)) {
+        badRequest(res, "Enter a valid email address.");
+        return;
+      }
+      const subscriber = await subscribe(config.databaseUrl, email, firstName);
+      res.status(201).json({ subscriber });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.patch("/admin/subscribers/:id", guard, async (req, res) => {
+    try {
+      const status = String(req.body?.status ?? "") as SubscriberStatus;
+      if (!["active", "unsubscribed", "bounced"].includes(status)) {
+        badRequest(res, "Invalid status.");
+        return;
+      }
+      const subscriber = await updateSubscriberStatus(
+        config.databaseUrl,
+        req.params.id,
+        status
+      );
+      if (!subscriber) {
+        res.status(404).json({ error: "Subscriber not found" });
+        return;
+      }
+      res.json({ subscriber });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.delete("/admin/subscribers/:id", guard, async (req, res) => {
+    try {
+      const ok = await deleteSubscriber(config.databaseUrl, req.params.id);
+      if (!ok) {
+        res.status(404).json({ error: "Subscriber not found" });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.get("/admin/issues", guard, async (_req, res) => {
+    try {
+      const issues = await listIssues(config.databaseUrl);
+      res.json({ issues });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/admin/issues", guard, async (req, res) => {
+    try {
+      const issue_date = String(req.body?.issue_date ?? "").trim();
+      const subject = String(req.body?.subject ?? "").trim();
+      if (!issue_date || !subject) {
+        badRequest(res, "issue_date and subject are required.");
+        return;
+      }
+      const coming_up = normalizeComingUp(req.body?.coming_up);
+      const issue = await createIssue(config.databaseUrl, {
+        ...req.body,
+        issue_date,
+        subject,
+        coming_up,
+      });
+      res.status(201).json({ issue });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.patch("/admin/issues/:id", guard, async (req, res) => {
+    try {
+      if (req.body?.status) {
+        const status = String(req.body.status) as IssueStatus;
+        if (!["draft", "ready", "sending", "sent"].includes(status)) {
+          badRequest(res, "Invalid issue status.");
+          return;
+        }
+      }
+      const payload = { ...req.body };
+      if (payload.coming_up !== undefined) {
+        payload.coming_up = normalizeComingUp(payload.coming_up);
+      }
+      const issue = await updateIssue(config.databaseUrl, req.params.id, payload);
+      if (!issue) {
+        res.status(404).json({ error: "Issue not found" });
+        return;
+      }
+      res.json({ issue });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.delete("/admin/issues/:id", guard, async (req, res) => {
+    try {
+      const ok = await deleteIssue(config.databaseUrl, req.params.id);
+      if (!ok) {
+        res.status(404).json({ error: "Issue not found" });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.get("/admin/issues/:id/stories", guard, async (req, res) => {
+    try {
+      const stories = await getStories(config.databaseUrl, req.params.id);
+      res.json({ stories });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.put("/admin/issues/:id/stories", guard, async (req, res) => {
+    try {
+      const body = req.body ?? {};
+      const position = Number(body.position);
+      if (!Number.isInteger(position) || position < 1 || position > 6) {
+        badRequest(res, "position must be 1–6.");
+        return;
+      }
+      if (!body.title || !body.toc_title) {
+        badRequest(res, "title and toc_title are required.");
+        return;
+      }
+      const story = await upsertStory(config.databaseUrl, req.params.id, {
+        id: body.id,
+        position,
+        toc_title: String(body.toc_title),
+        title: String(body.title),
+        eyebrow: String(body.eyebrow ?? ""),
+        summary: String(body.summary ?? ""),
+        why_it_matters: String(body.why_it_matters ?? ""),
+        url: String(body.url ?? ""),
+        image_url: body.image_url ? String(body.image_url) : null,
+        quote: body.quote ? String(body.quote) : null,
+        quote_attribution: body.quote_attribution
+          ? String(body.quote_attribution)
+          : null,
+      });
+      res.json({ story });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.delete("/admin/issues/:issueId/stories/:storyId", guard, async (req, res) => {
+    try {
+      const ok = await deleteStory(
+        config.databaseUrl,
+        req.params.issueId,
+        req.params.storyId
+      );
+      if (!ok) {
+        res.status(404).json({ error: "Story not found" });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/admin/issues/:id/send", guard, async (req, res) => {
+    try {
+      const dryRun = Boolean(req.body?.dry_run);
+      const result = await sendNewsletter({
+        ...config,
+        issueId: req.params.id,
+        dryRun: dryRun || config.dryRun,
+      });
+      res.json({ ok: true, result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, error: message });
+    }
+  });
+
+  router.get("/admin/tasks", guard, async (_req, res) => {
+    try {
+      const tasks = await listTasks(config.databaseUrl);
+      res.json({ tasks });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/admin/tasks", guard, async (req, res) => {
+    try {
+      const title = String(req.body?.title ?? "").trim();
+      if (!title) {
+        badRequest(res, "title is required.");
+        return;
+      }
+      const task = await createTask(config.databaseUrl, {
+        title,
+        notes: String(req.body?.notes ?? ""),
+        status: (req.body?.status as TaskStatus) || "todo",
+        due_date: req.body?.due_date || null,
+        issue_id: req.body?.issue_id || null,
+      });
+      res.status(201).json({ task });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.patch("/admin/tasks/:id", guard, async (req, res) => {
+    try {
+      if (req.body?.status) {
+        const status = String(req.body.status) as TaskStatus;
+        if (!["todo", "doing", "done"].includes(status)) {
+          badRequest(res, "Invalid task status.");
+          return;
+        }
+      }
+      const task = await updateTask(config.databaseUrl, req.params.id, req.body);
+      if (!task) {
+        res.status(404).json({ error: "Task not found" });
+        return;
+      }
+      res.json({ task });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.delete("/admin/tasks/:id", guard, async (req, res) => {
+    try {
+      const ok = await deleteTask(config.databaseUrl, req.params.id);
+      if (!ok) {
+        res.status(404).json({ error: "Task not found" });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  return router;
+}
+
+function normalizeComingUp(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split("\n")
+      .map((line) => line.replace(/^[•\-\*]\s*/, "").trim())
+      .filter(Boolean);
+  }
+  return [];
+}
