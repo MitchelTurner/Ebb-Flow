@@ -50,9 +50,13 @@ CREATE TABLE IF NOT EXISTS stories (
   image_url TEXT,
   quote TEXT,
   quote_attribution TEXT,
+  source_notes TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (issue_id, position)
 );
+
+-- Safe for existing Railway databases created before source_notes existed.
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS source_notes TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS sends (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

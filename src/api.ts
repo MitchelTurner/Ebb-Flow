@@ -25,6 +25,7 @@ import {
   updateTask,
   upsertStory,
 } from "./db.js";
+import { generateAndSaveIssue } from "./generate.js";
 import { sendNewsletter } from "./send.js";
 import type { IssueStatus, SubscriberStatus, TaskStatus } from "./types.js";
 
@@ -263,15 +264,15 @@ export function createApiRouter(config: AppConfig): Router {
         badRequest(res, "position must be 1–6.");
         return;
       }
-      if (!body.title || !body.toc_title) {
-        badRequest(res, "title and toc_title are required.");
-        return;
-      }
+      const sourceNotes = String(body.source_notes ?? "");
+      const title = String(body.title ?? "").trim() || `Story ${position} draft`;
+      const tocTitle =
+        String(body.toc_title ?? "").trim() || title.slice(0, 48) || `Story ${position}`;
       const story = await upsertStory(config.databaseUrl, req.params.id, {
         id: body.id,
         position,
-        toc_title: String(body.toc_title),
-        title: String(body.title),
+        toc_title: tocTitle,
+        title,
         eyebrow: String(body.eyebrow ?? ""),
         summary: String(body.summary ?? ""),
         why_it_matters: String(body.why_it_matters ?? ""),
@@ -281,11 +282,28 @@ export function createApiRouter(config: AppConfig): Router {
         quote_attribution: body.quote_attribution
           ? String(body.quote_attribution)
           : null,
+        source_notes: sourceNotes,
       });
-      res.json({ story });
+
+      let generated = null;
+      if (config.anthropicAutoWrite && sourceNotes.trim() && config.anthropicApiKey) {
+        generated = await generateAndSaveIssue(config, req.params.id);
+      }
+
+      res.json({ story, generated });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/admin/issues/:id/generate", guard, async (req, res) => {
+    try {
+      const result = await generateAndSaveIssue(config, req.params.id);
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, error: message });
     }
   });
 

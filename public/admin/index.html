@@ -115,6 +115,7 @@
           <label style="grid-column:1/-1">Tip body <textarea name="tip_body"></textarea></label>
           <div style="grid-column:1/-1; display:flex; gap:0.5rem; flex-wrap:wrap">
             <button type="submit">Save issue</button>
+            <button type="button" class="secondary" id="generate-claude-btn">Write with Claude</button>
             <button type="button" class="secondary" id="send-dry-btn">Dry-run send</button>
             <button type="button" id="send-live-btn">Send now</button>
           </div>
@@ -123,6 +124,7 @@
         <div class="section-head" style="margin-top:1.5rem">
           <h2>Stories</h2>
         </div>
+        <p class="muted">Paste raw updates into <strong>Source notes</strong>, save stories, then click <strong>Write with Claude</strong> to draft subject, intro, and polished copy.</p>
         <form id="story-form" class="grid-form cols-2">
           <input type="hidden" name="id">
           <label>Position
@@ -136,8 +138,11 @@
             </select>
           </label>
           <label>Eyebrow <input name="eyebrow" placeholder="Lead Story · Local Government"></label>
-          <label>TOC title <input name="toc_title" required></label>
-          <label>Title <input name="title" required></label>
+          <label style="grid-column:1/-1">Source notes (for Claude)
+            <textarea name="source_notes" placeholder="Council voted 4–3 on $14M budget… residents packed chamber… Mayor Reyes quote about library…"></textarea>
+          </label>
+          <label>TOC title <input name="toc_title" placeholder="Short TOC line"></label>
+          <label>Title <input name="title" placeholder="Full headline (optional before Claude)"></label>
           <label style="grid-column:1/-1">Summary <textarea name="summary"></textarea></label>
           <label style="grid-column:1/-1">Why it matters <input name="why_it_matters"></label>
           <label>URL <input name="url"></label>

@@ -49,6 +49,8 @@ export interface Story {
   image_url: string | null;
   quote: string | null;
   quote_attribution: string | null;
+  /** Raw reporter/editor notes Claude uses to draft polished copy. */
+  source_notes: string;
 }
 
 export interface Task {

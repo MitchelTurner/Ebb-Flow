@@ -232,6 +232,11 @@ async function loadStories(issueId) {
           (story) => `<div class="story-item">
             <h3>0${story.position} · ${escapeHtml(story.title)}</h3>
             <div class="muted">${escapeHtml(story.eyebrow || "")}</div>
+            ${
+              story.source_notes
+                ? `<p class="muted"><strong>Notes:</strong> ${escapeHtml(story.source_notes)}</p>`
+                : ""
+            }
             <p>${escapeHtml(story.summary || "")}</p>
             <div class="row-actions">
               <button type="button" class="secondary" data-story-edit='${escapeAttr(JSON.stringify(story))}'>Edit</button>
@@ -436,6 +441,33 @@ async function sendSelected(dryRun) {
 document.getElementById("send-dry-btn")?.addEventListener("click", () => sendSelected(true));
 document.getElementById("send-live-btn")?.addEventListener("click", () => sendSelected(false));
 
+document.getElementById("generate-claude-btn")?.addEventListener("click", async () => {
+  if (!selectedIssueId) {
+    flash(appFlash, "Save the issue and at least one story first.", "err");
+    return;
+  }
+  const btn = document.getElementById("generate-claude-btn");
+  if (btn instanceof HTMLButtonElement) btn.disabled = true;
+  flash(appFlash, "Claude is writing this issue…", "");
+  try {
+    const result = await api(`/api/admin/issues/${selectedIssueId}/generate`, {
+      method: "POST",
+      body: "{}",
+    });
+    fillIssueForm(result.issue);
+    flash(
+      appFlash,
+      `Claude draft saved (${result.model}). Review before sending.`,
+      "ok"
+    );
+    await loadIssues();
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  } finally {
+    if (btn instanceof HTMLButtonElement) btn.disabled = false;
+  }
+});
+
 storyForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selectedIssueId) {
@@ -446,15 +478,21 @@ storyForm?.addEventListener("submit", async (event) => {
   const data = Object.fromEntries(new FormData(storyForm).entries());
   data.position = Number(data.position);
   try {
-    await api(`/api/admin/issues/${selectedIssueId}/stories`, {
+    const result = await api(`/api/admin/issues/${selectedIssueId}/stories`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
     storyForm.reset();
     const idField = storyForm.elements.namedItem("id");
     if (idField instanceof HTMLInputElement) idField.value = "";
-    flash(appFlash, "Story saved.", "ok");
-    await loadStories(selectedIssueId);
+    if (result.generated?.issue) {
+      fillIssueForm(result.generated.issue);
+      flash(appFlash, "Story saved and Claude rewrote the issue.", "ok");
+    } else {
+      flash(appFlash, "Story saved.", "ok");
+      await loadStories(selectedIssueId);
+    }
+    await loadIssues();
   } catch (err) {
     flash(appFlash, err.message, "err");
   }

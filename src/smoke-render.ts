@@ -53,6 +53,7 @@ const stories: Story[] = [1, 2, 3, 4, 5, 6].map((position) => ({
       : null,
   quote: position === 1 ? "A memorable quote." : null,
   quote_attribution: position === 1 ? "Someone Notable" : null,
+  source_notes: `Raw notes for story ${position}`,
 }));
 
 const html = renderIssueEmail({

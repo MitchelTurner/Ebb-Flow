@@ -12,6 +12,7 @@
     "dev": "tsx src/cli.ts",
     "send": "tsx src/cli.ts send",
     "preview": "tsx src/cli.ts preview",
+    "generate": "tsx src/cli.ts generate",
     "serve": "tsx src/cli.ts serve",
     "db:migrate": "tsx src/cli.ts migrate",
     "db:seed": "tsx src/cli.ts seed",
@@ -21,6 +22,7 @@
     "smoke": "tsx src/smoke-render.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.112.3",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "pg": "^8.13.3",
