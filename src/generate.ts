@@ -1,4 +1,4 @@
-import { generateIssueCopy } from "./claude.js";
+import { CLAUDE_MODEL, generateIssueCopy } from "./claude.js";
 import type { AppConfig } from "./config.js";
 import {
   getIssueForSend,
@@ -11,7 +11,7 @@ import type { Issue, Story } from "./types.js";
 export interface GenerateResult {
   issue: Issue;
   stories: Story[];
-  model: string;
+  model: typeof CLAUDE_MODEL;
 }
 
 export async function generateAndSaveIssue(
@@ -46,7 +46,6 @@ export async function generateAndSaveIssue(
 
   const generated = await generateIssueCopy({
     apiKey: config.anthropicApiKey,
-    model: config.anthropicModel,
     issue,
     stories,
   });
@@ -85,6 +84,6 @@ export async function generateAndSaveIssue(
   return {
     issue: updatedIssue,
     stories: savedStories.sort((a, b) => a.position - b.position),
-    model: config.anthropicModel,
+    model: CLAUDE_MODEL,
   };
 }
