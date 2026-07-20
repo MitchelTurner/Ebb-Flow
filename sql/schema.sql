@@ -76,16 +76,35 @@ CREATE TABLE IF NOT EXISTS findings (
 );
 
 -- Transcripts Claude analyzes into newsletter story drafts.
+-- If a transcripts table already exists (different schema), CREATE is skipped
+-- and the ALTERs below add any missing app columns without wiping data.
 CREATE TABLE IF NOT EXISTS transcripts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL DEFAULT '',
-  content TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
   source TEXT NOT NULL DEFAULT '',
   speaker TEXT NOT NULL DEFAULT '',
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   used_in_issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
+ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS content TEXT NOT NULL DEFAULT '';
+ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT '';
+ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS speaker TEXT NOT NULL DEFAULT '';
+ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS used_in_issue_id UUID REFERENCES issues(id) ON DELETE SET NULL;
+ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+-- Raw findings may also predate the app schema.
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS body TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS source_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS found_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS used_in_issue_id UUID REFERENCES issues(id) ON DELETE SET NULL;
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 -- Tracks which external/source rows have already been drafted into an issue
 -- (used for discovered transcript tables that lack used_in_issue_id).
