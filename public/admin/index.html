@@ -39,6 +39,7 @@
     <nav class="tabs" role="tablist" aria-label="Admin sections">
       <button class="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
       <button class="tab" type="button" data-tab="review" aria-selected="false">Review &amp; schedule</button>
+      <button class="tab" type="button" data-tab="transcripts" aria-selected="false">Transcripts</button>
       <button class="tab" type="button" data-tab="findings" aria-selected="false">Findings</button>
       <button class="tab" type="button" data-tab="subscribers" aria-selected="false">Subscribers</button>
       <button class="tab" type="button" data-tab="issues" aria-selected="false">Emails</button>
@@ -49,16 +50,16 @@
 
     <section id="panel-overview" class="panel" data-panel="overview">
       <div class="stats" id="stats"></div>
-      <p class="muted">Newest unused findings are auto-drafted with Claude Fable 5 into Review. Approve and schedule delivery there.</p>
+      <p class="muted">Claude Fable 5 analyzes the newest unused <strong>transcripts</strong> from the database (findings are a fallback) and drafts a review email. Approve and schedule delivery in Review.</p>
       <div class="toolbar" style="margin-top:1rem">
-        <button type="button" id="overview-auto-draft-btn">Draft from newest findings</button>
+        <button type="button" id="overview-auto-draft-btn">Draft from newest transcripts</button>
       </div>
     </section>
 
     <section id="panel-review" class="panel hidden" data-panel="review">
       <div class="section-head">
         <h2>Review &amp; schedule</h2>
-        <button type="button" id="review-auto-draft-btn">Draft from newest findings</button>
+        <button type="button" id="review-auto-draft-btn">Draft from newest transcripts</button>
       </div>
       <p class="muted">Claude drafts stay in <strong>draft</strong> until you schedule delivery. Cron sends when <code>scheduled_for</code> is due.</p>
       <div style="overflow:auto">
@@ -81,11 +82,36 @@
       </form>
     </section>
 
+    <section id="panel-transcripts" class="panel hidden" data-panel="transcripts">
+      <div class="section-head">
+        <h2>Transcripts</h2>
+      </div>
+      <p class="muted">Paste meeting / interview transcripts here (or insert into the <code>transcripts</code> table). Claude analyzes unused newest rows when drafting the email template.</p>
+      <form id="transcript-form" class="grid-form cols-2">
+        <label>Title <input name="title" placeholder="Optional short label"></label>
+        <label>Source <input name="source" placeholder="City Council · July 14"></label>
+        <label style="grid-column:1/-1">Transcript
+          <textarea name="content" required placeholder="Full transcript text Claude should analyze…"></textarea>
+        </label>
+        <label>Speaker <input name="speaker" placeholder="Optional"></label>
+        <label>Recorded at <input type="datetime-local" name="recorded_at"></label>
+        <div><button type="submit">Add transcript</button></div>
+      </form>
+      <div style="overflow:auto; margin-top:1rem">
+        <table>
+          <thead>
+            <tr><th>When</th><th>Transcript</th><th>Used?</th><th></th></tr>
+          </thead>
+          <tbody id="transcripts-body"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section id="panel-findings" class="panel hidden" data-panel="findings">
       <div class="section-head">
         <h2>Findings</h2>
       </div>
-      <p class="muted">Add newer database findings here. Unused newest entries are what Claude auto-writes into draft emails.</p>
+      <p class="muted">Short tip-style updates. Used as a fallback when no unused transcripts are available.</p>
       <form id="finding-form" class="grid-form cols-2">
         <label>Title <input name="title" placeholder="Optional short label"></label>
         <label>Category <input name="category" placeholder="Local Government"></label>

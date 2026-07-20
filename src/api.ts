@@ -31,6 +31,11 @@ import {
   updateTask,
   upsertStory,
 } from "./db.js";
+import {
+  createTranscript,
+  deleteTranscript,
+  listTranscripts,
+} from "./sources.js";
 import { generateAndSaveIssue } from "./generate.js";
 import { sendNewsletter } from "./send.js";
 import type { IssueStatus, SubscriberStatus, TaskStatus } from "./types.js";
@@ -428,6 +433,52 @@ export function createApiRouter(config: AppConfig): Router {
       const ok = await deleteFinding(config.databaseUrl, req.params.id);
       if (!ok) {
         res.status(404).json({ error: "Finding not found or already used" });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.get("/admin/transcripts", guard, async (req, res) => {
+    try {
+      const unusedOnly = String(req.query.unused ?? "") === "1";
+      const transcripts = await listTranscripts(config.databaseUrl, { unusedOnly });
+      res.json({ transcripts });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/admin/transcripts", guard, async (req, res) => {
+    try {
+      const content = String(req.body?.content ?? "").trim();
+      if (!content) {
+        badRequest(res, "content is required.");
+        return;
+      }
+      const transcript = await createTranscript(config.databaseUrl, {
+        title: String(req.body?.title ?? ""),
+        content,
+        source: String(req.body?.source ?? ""),
+        speaker: String(req.body?.speaker ?? ""),
+        recorded_at: req.body?.recorded_at || undefined,
+      });
+      res.status(201).json({ transcript });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.delete("/admin/transcripts/:id", guard, async (req, res) => {
+    try {
+      const ok = await deleteTranscript(config.databaseUrl, req.params.id);
+      if (!ok) {
+        res.status(404).json({ error: "Transcript not found or already used" });
         return;
       }
       res.json({ ok: true });

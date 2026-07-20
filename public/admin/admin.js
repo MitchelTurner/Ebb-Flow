@@ -92,6 +92,7 @@ async function refreshAll() {
     loadIssues(),
     loadTasks(),
     loadReview(),
+    loadTranscripts(),
     loadFindings(),
   ]);
 }
@@ -101,6 +102,7 @@ async function loadStats() {
   if (!statsEl) return;
   const items = [
     ["Active subscribers", stats.active_subscribers],
+    ["Unused transcripts", stats.unused_transcripts ?? 0],
     ["Unused findings", stats.unused_findings],
     ["Drafts to review", stats.draft_issues],
     ["Scheduled", stats.scheduled_issues],
@@ -116,7 +118,7 @@ async function loadStats() {
 }
 
 async function runAutoDraft() {
-  flash(appFlash, "Drafting from newest findings with Claude Fable 5…", "");
+  flash(appFlash, "Analyzing newest transcripts with Claude Fable 5…", "");
   try {
     const { draft } = await api("/api/admin/auto-draft", {
       method: "POST",
@@ -126,9 +128,10 @@ async function runAutoDraft() {
       flash(appFlash, draft.reason || "Nothing to draft.", "err");
       return;
     }
+    const kind = draft.sourceKind || "source";
     flash(
       appFlash,
-      `Draft ready from ${draft.findingCount} findings — review & schedule it.`,
+      `Draft ready from ${draft.findingCount} ${kind}${draft.findingCount === 1 ? "" : "s"} — review & schedule it.`,
       "ok"
     );
     selectTab("review");
@@ -161,7 +164,7 @@ async function loadReview() {
             </tr>`;
           })
           .join("")
-      : `<tr><td colspan="4" class="muted">No drafts yet. Add findings, then draft with Claude.</td></tr>`;
+      : `<tr><td colspan="4" class="muted">No drafts yet. Add transcripts, then draft with Claude.</td></tr>`;
   }
   if (select instanceof HTMLSelectElement) {
     select.innerHTML = issues
@@ -172,6 +175,38 @@ async function loadReview() {
       )
       .join("");
   }
+}
+
+async function loadTranscripts() {
+  const { transcripts } = await api("/api/admin/transcripts");
+  const body = document.getElementById("transcripts-body");
+  if (!body) return;
+  body.innerHTML = transcripts.length
+    ? transcripts
+        .map((row) => {
+          const when = row.recorded_at
+            ? new Date(row.recorded_at).toLocaleString()
+            : "—";
+          const used = row.used_in_issue_id ? "used" : "unused";
+          const preview = String(row.content || "");
+          return `<tr>
+            <td>${escapeHtml(when)}</td>
+            <td>
+              <strong>${escapeHtml(row.title || "(untitled)")}</strong>
+              <div class="muted">${escapeHtml(preview.slice(0, 160))}${preview.length > 160 ? "…" : ""}</div>
+            </td>
+            <td><span class="badge ${used === "unused" ? "todo" : "done"}">${used}</span></td>
+            <td class="row-actions">
+              ${
+                row.used_in_issue_id
+                  ? ""
+                  : `<button type="button" class="danger" data-transcript-delete="${row.id}">Delete</button>`
+              }
+            </td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="4" class="muted">No transcripts yet.</td></tr>`;
 }
 
 async function loadFindings() {
@@ -590,6 +625,43 @@ document.getElementById("schedule-form")?.addEventListener("submit", async (even
     });
     flash(appFlash, "Issue approved and scheduled.", "ok");
     await refreshAll();
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  }
+});
+
+document.getElementById("transcript-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!(form instanceof HTMLFormElement)) return;
+  const data = Object.fromEntries(new FormData(form).entries());
+  if (data.recorded_at) {
+    data.recorded_at = new Date(String(data.recorded_at)).toISOString();
+  } else {
+    delete data.recorded_at;
+  }
+  try {
+    await api("/api/admin/transcripts", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    form.reset();
+    flash(appFlash, "Transcript added.", "ok");
+    await Promise.all([loadTranscripts(), loadStats()]);
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  }
+});
+
+document.getElementById("transcripts-body")?.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || !target.dataset.transcriptDelete) return;
+  if (!confirm("Delete this unused transcript?")) return;
+  try {
+    await api(`/api/admin/transcripts/${target.dataset.transcriptDelete}`, {
+      method: "DELETE",
+    });
+    await Promise.all([loadTranscripts(), loadStats()]);
   } catch (err) {
     flash(appFlash, err.message, "err");
   }

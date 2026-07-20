@@ -102,11 +102,13 @@ If you ever see `relation "subscribers" does not exist`, redeploy the web servic
 
 ## Editorial workflow
 
-1. Add **Findings** (newer DB updates/tips) in Admin → Findings, or insert into the `findings` table.
-2. Claude Fable 5 **auto-drafts** a review issue from the newest unused findings (on boot, `/cron/auto-draft`, or Admin → Draft from newest findings).
+1. Add **Transcripts** (meeting / interview text) in Admin → Transcripts, or insert into the `transcripts` table. Short tip-style **Findings** are a fallback when no unused transcripts exist.
+2. Claude Fable 5 **analyzes** the newest unused transcripts and auto-drafts a review issue that fills the email template (on boot, `/cron/auto-draft`, or Admin → Draft from newest transcripts).
 3. In **Review & schedule**, preview the draft, edit if needed, then **Approve & schedule** a delivery time.
 4. Cron `POST /cron/send` (or `npm run start:send`) delivers due `ready` issues when `scheduled_for` has passed.
 5. After send, status becomes `sent`.
+
+Draft source priority: `transcripts` table → other public tables named like `%transcript%` / `%recording%` → `findings`.
 
 ### Claude auto-write
 
