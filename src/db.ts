@@ -54,22 +54,66 @@ export async function runSqlFile(databaseUrl: string, relativePath: string): Pro
   }
 }
 
+async function countUnusedSourceRows(
+  databaseUrl: string,
+  table: "transcripts" | "findings"
+): Promise<number> {
+  const db = getPool(databaseUrl);
+  const { rows: colRows } = await db.query<{ column_name: string }>(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = $1`,
+    [table]
+  );
+  if (!colRows.length) return 0;
+
+  const cols = new Map(colRows.map((r) => [r.column_name.toLowerCase(), r.column_name]));
+  const idCol =
+    cols.get("id") || cols.get("uuid") || cols.get("transcript_id") || cols.get("pk");
+  if (!idCol || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(idCol)) return 0;
+
+  const usedCol = cols.get("used_in_issue_id");
+  const usedClause = usedCol ? `AND t.${usedCol} IS NULL` : "";
+
+  try {
+    const { rows } = await db.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count
+       FROM ${table} t
+       WHERE NOT EXISTS (
+         SELECT 1 FROM source_usage su
+         WHERE su.source_table = $1 AND su.source_id = t.${idCol}::text
+       )
+       ${usedClause}`,
+      [table]
+    );
+    return Number(rows[0]?.count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
 export async function getDashboardStats(databaseUrl: string): Promise<DashboardStats> {
-  const { rows } = await getPool(databaseUrl).query<DashboardStats>(`
+  const { rows } = await getPool(databaseUrl).query<Omit<DashboardStats, "unused_findings" | "unused_transcripts">>(`
     SELECT
       (SELECT COUNT(*)::int FROM subscribers WHERE status = 'active') AS active_subscribers,
       (SELECT COUNT(*)::int FROM subscribers) AS total_subscribers,
       (SELECT COUNT(*)::int FROM issues WHERE status = 'draft') AS draft_issues,
       (SELECT COUNT(*)::int FROM issues WHERE status = 'ready') AS ready_issues,
       (SELECT COUNT(*)::int FROM tasks WHERE status IN ('todo', 'doing')) AS open_tasks,
-      COALESCE((SELECT COUNT(*)::int FROM findings WHERE used_in_issue_id IS NULL), 0)
-        AS unused_findings,
-      COALESCE((SELECT COUNT(*)::int FROM transcripts WHERE used_in_issue_id IS NULL), 0)
-        AS unused_transcripts,
       (SELECT COUNT(*)::int FROM issues
         WHERE status = 'ready' AND scheduled_for IS NOT NULL AND scheduled_for > now()) AS scheduled_issues
   `);
-  return rows[0];
+
+  const [unused_findings, unused_transcripts] = await Promise.all([
+    countUnusedSourceRows(databaseUrl, "findings"),
+    countUnusedSourceRows(databaseUrl, "transcripts"),
+  ]);
+
+  return {
+    ...rows[0],
+    unused_findings,
+    unused_transcripts,
+  };
 }
 
 export async function subscribe(

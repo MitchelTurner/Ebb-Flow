@@ -15,6 +15,43 @@ export interface DraftSource {
   category: string;
 }
 
+type TranscriptShape = {
+  idCol: string;
+  contentCol: string;
+  titleCol: string | null;
+  sourceCol: string | null;
+  speakerCol: string | null;
+  timeCol: string | null;
+  usedCol: string | null;
+  createdCol: string | null;
+};
+
+const CONTENT_CANDIDATES = [
+  "transcript",
+  "transcript_text",
+  "content",
+  "full_text",
+  "raw_text",
+  "text",
+  "body",
+  "notes",
+];
+
+const TITLE_CANDIDATES = ["title", "name", "subject", "headline", "meeting_name"];
+const SOURCE_CANDIDATES = ["source", "source_label", "origin", "meeting", "source_url", "url"];
+const SPEAKER_CANDIDATES = ["speaker", "author", "participant", "speakers"];
+const TIME_CANDIDATES = [
+  "recorded_at",
+  "created_at",
+  "updated_at",
+  "timestamp",
+  "inserted_at",
+  "occurred_at",
+  "started_at",
+];
+const ID_CANDIDATES = ["id", "uuid", "transcript_id", "pk"];
+const USED_CANDIDATES = ["used_in_issue_id", "issue_id"];
+
 function isSafeIdent(name: string): boolean {
   return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
 }
@@ -39,6 +76,32 @@ async function tableExists(databaseUrl: string, table: string): Promise<boolean>
   return Boolean(rows[0]?.exists);
 }
 
+async function getTableColumns(databaseUrl: string, table: string): Promise<string[]> {
+  const { rows } = await getPool(databaseUrl).query<{ column_name: string }>(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = $1`,
+    [table]
+  );
+  return rows.map((r) => r.column_name);
+}
+
+function resolveTranscriptShape(columns: string[]): TranscriptShape | null {
+  const idCol = pickColumn(columns, ID_CANDIDATES);
+  const contentCol = pickColumn(columns, CONTENT_CANDIDATES);
+  if (!idCol || !contentCol) return null;
+  return {
+    idCol,
+    contentCol,
+    titleCol: pickColumn(columns, TITLE_CANDIDATES),
+    sourceCol: pickColumn(columns, SOURCE_CANDIDATES),
+    speakerCol: pickColumn(columns, SPEAKER_CANDIDATES),
+    timeCol: pickColumn(columns, TIME_CANDIDATES),
+    usedCol: pickColumn(columns, USED_CANDIDATES),
+    createdCol: pickColumn(columns, ["created_at", "inserted_at"]),
+  };
+}
+
 async function markSourceUsage(
   databaseUrl: string,
   sourceTable: string,
@@ -59,44 +122,101 @@ async function markSourceUsage(
   }
 }
 
-/** Newest unused rows from the app's own transcripts table. */
+function unusedWhere(shape: TranscriptShape, tableParamIndex: number): string {
+  const parts = [
+    `COALESCE(TRIM(${shape.contentCol}::text), '') <> ''`,
+    `NOT EXISTS (
+       SELECT 1 FROM source_usage su
+       WHERE su.source_table = $${tableParamIndex} AND su.source_id = ${shape.idCol}::text
+     )`,
+  ];
+  if (shape.usedCol) {
+    parts.push(`${shape.usedCol} IS NULL`);
+  }
+  return parts.join("\n         AND ");
+}
+
+function orderBy(shape: TranscriptShape): string {
+  if (shape.timeCol && shape.createdCol && shape.timeCol !== shape.createdCol) {
+    return `${shape.timeCol} DESC NULLS LAST, ${shape.createdCol} DESC NULLS LAST`;
+  }
+  if (shape.timeCol) return `${shape.timeCol} DESC NULLS LAST`;
+  if (shape.createdCol) return `${shape.createdCol} DESC NULLS LAST`;
+  return `${shape.idCol} DESC`;
+}
+
+async function loadUnusedFromTranscriptTable(
+  databaseUrl: string,
+  table: string,
+  limit: number,
+  kind: DraftSourceKind
+): Promise<DraftSource[]> {
+  if (!isSafeIdent(table)) return [];
+  if (!(await tableExists(databaseUrl, table))) return [];
+
+  const columns = await getTableColumns(databaseUrl, table);
+  const shape = resolveTranscriptShape(columns);
+  if (!shape) {
+    console.warn(
+      `Skipping table "${table}": need an id column and a text/content/transcript column.`
+    );
+    return [];
+  }
+
+  const selectParts = [
+    `${shape.idCol}::text AS id`,
+    `${shape.contentCol}::text AS content`,
+    shape.titleCol ? `${shape.titleCol}::text AS title` : `''::text AS title`,
+    shape.sourceCol ? `${shape.sourceCol}::text AS source` : `''::text AS source`,
+    shape.speakerCol ? `${shape.speakerCol}::text AS speaker` : `''::text AS speaker`,
+    shape.timeCol ? `${shape.timeCol}::text AS occurred_at` : `NULL::text AS occurred_at`,
+  ];
+
+  try {
+    const { rows } = await getPool(databaseUrl).query<{
+      id: string;
+      content: string;
+      title: string;
+      source: string;
+      speaker: string;
+      occurred_at: string | null;
+    }>(
+      `SELECT ${selectParts.join(", ")}
+       FROM ${table}
+       WHERE ${unusedWhere(shape, 1)}
+       ORDER BY ${orderBy(shape)}
+       LIMIT $2`,
+      [table, limit]
+    );
+
+    return rows
+      .filter((row) => row.content?.trim())
+      .map((row) => ({
+        kind,
+        id: row.id,
+        sourceTable: table,
+        title: row.title || "",
+        content: row.content,
+        meta: [row.speaker && `Speaker: ${row.speaker}`, row.source && `Source: ${row.source}`]
+          .filter(Boolean)
+          .join(" · "),
+        occurredAt: row.occurred_at,
+        url: row.source?.startsWith("http") ? row.source : "",
+        category: row.source || "Transcript",
+      }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`Skipping transcript table "${table}": ${message}`);
+    return [];
+  }
+}
+
+/** Newest unused rows from the app/public transcripts table. */
 export async function getNewestUnusedTranscripts(
   databaseUrl: string,
   limit: number
 ): Promise<DraftSource[]> {
-  if (!(await tableExists(databaseUrl, "transcripts"))) return [];
-
-  const { rows } = await getPool(databaseUrl).query<{
-    id: string;
-    title: string;
-    content: string;
-    source: string;
-    speaker: string;
-    recorded_at: string;
-  }>(
-    `SELECT id::text, title, content, source, speaker, recorded_at::text
-     FROM transcripts
-     WHERE used_in_issue_id IS NULL
-     ORDER BY recorded_at DESC, created_at DESC
-     LIMIT $1`,
-    [limit]
-  );
-
-  return rows
-    .filter((row) => row.content?.trim())
-    .map((row) => ({
-      kind: "transcript" as const,
-      id: row.id,
-      sourceTable: "transcripts",
-      title: row.title || "",
-      content: row.content,
-      meta: [row.speaker && `Speaker: ${row.speaker}`, row.source && `Source: ${row.source}`]
-        .filter(Boolean)
-        .join(" · "),
-      occurredAt: row.recorded_at,
-      url: "",
-      category: row.source || "Transcript",
-    }));
+  return loadUnusedFromTranscriptTable(databaseUrl, "transcripts", limit, "transcript");
 }
 
 /** Newest unused findings (legacy / tip stream). */
@@ -106,35 +226,70 @@ export async function getNewestUnusedFindingsAsSources(
 ): Promise<DraftSource[]> {
   if (!(await tableExists(databaseUrl, "findings"))) return [];
 
-  const { rows } = await getPool(databaseUrl).query<{
-    id: string;
-    title: string;
-    body: string;
-    source_url: string;
-    category: string;
-    found_at: string;
-  }>(
-    `SELECT id::text, title, body, source_url, category, found_at::text
-     FROM findings
-     WHERE used_in_issue_id IS NULL
-     ORDER BY found_at DESC, created_at DESC
-     LIMIT $1`,
-    [limit]
-  );
+  const columns = await getTableColumns(databaseUrl, "findings");
+  const bodyCol = pickColumn(columns, ["body", "content", "summary", "text", "notes"]);
+  const idCol = pickColumn(columns, ID_CANDIDATES);
+  if (!bodyCol || !idCol) return [];
 
-  return rows
-    .filter((row) => row.body?.trim())
-    .map((row) => ({
-      kind: "finding" as const,
-      id: row.id,
-      sourceTable: "findings",
-      title: row.title || "",
-      content: row.body,
-      meta: row.category || "",
-      occurredAt: row.found_at,
-      url: row.source_url || "",
-      category: row.category || "Local",
-    }));
+  const titleCol = pickColumn(columns, TITLE_CANDIDATES);
+  const urlCol = pickColumn(columns, ["source_url", "url"]);
+  const categoryCol = pickColumn(columns, ["category", "source", "label"]);
+  const timeCol = pickColumn(columns, ["found_at", "created_at", "updated_at"]);
+  const usedCol = pickColumn(columns, USED_CANDIDATES);
+
+  const selectParts = [
+    `${idCol}::text AS id`,
+    `${bodyCol}::text AS body`,
+    titleCol ? `${titleCol}::text AS title` : `''::text AS title`,
+    urlCol ? `${urlCol}::text AS source_url` : `''::text AS source_url`,
+    categoryCol ? `${categoryCol}::text AS category` : `''::text AS category`,
+    timeCol ? `${timeCol}::text AS found_at` : `NULL::text AS found_at`,
+  ];
+
+  const unusedParts = [
+    `COALESCE(TRIM(${bodyCol}::text), '') <> ''`,
+    `NOT EXISTS (
+       SELECT 1 FROM source_usage su
+       WHERE su.source_table = 'findings' AND su.source_id = ${idCol}::text
+     )`,
+  ];
+  if (usedCol) unusedParts.push(`${usedCol} IS NULL`);
+
+  try {
+    const { rows } = await getPool(databaseUrl).query<{
+      id: string;
+      title: string;
+      body: string;
+      source_url: string;
+      category: string;
+      found_at: string | null;
+    }>(
+      `SELECT ${selectParts.join(", ")}
+       FROM findings
+       WHERE ${unusedParts.join("\n         AND ")}
+       ORDER BY ${timeCol ? `${timeCol} DESC NULLS LAST` : `${idCol} DESC`}
+       LIMIT $1`,
+      [limit]
+    );
+
+    return rows
+      .filter((row) => row.body?.trim())
+      .map((row) => ({
+        kind: "finding" as const,
+        id: row.id,
+        sourceTable: "findings",
+        title: row.title || "",
+        content: row.body,
+        meta: row.category || "",
+        occurredAt: row.found_at,
+        url: row.source_url || "",
+        category: row.category || "Local",
+      }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`Skipping findings table: ${message}`);
+    return [];
+  }
 }
 
 /**
@@ -160,97 +315,16 @@ export async function discoverExternalTranscripts(
   );
 
   const out: DraftSource[] = [];
-
   for (const { table_name: table } of tables) {
-    if (!isSafeIdent(table)) continue;
     if (out.length >= limit) break;
-
-    const { rows: cols } = await getPool(databaseUrl).query<{ column_name: string }>(
-      `SELECT column_name
-       FROM information_schema.columns
-       WHERE table_schema = 'public' AND table_name = $1`,
-      [table]
+    const rows = await loadUnusedFromTranscriptTable(
+      databaseUrl,
+      table,
+      limit - out.length,
+      "external_transcript"
     );
-    const columns = cols.map((c) => c.column_name);
-    const idCol = pickColumn(columns, ["id", "uuid", "transcript_id", "pk"]);
-    const contentCol = pickColumn(columns, [
-      "transcript",
-      "transcript_text",
-      "content",
-      "full_text",
-      "raw_text",
-      "text",
-      "body",
-      "notes",
-    ]);
-    if (!idCol || !contentCol) continue;
-
-    const titleCol = pickColumn(columns, ["title", "name", "subject", "headline"]);
-    const sourceCol = pickColumn(columns, ["source", "source_url", "url", "origin"]);
-    const speakerCol = pickColumn(columns, ["speaker", "author", "participant"]);
-    const timeCol = pickColumn(columns, [
-      "recorded_at",
-      "created_at",
-      "updated_at",
-      "timestamp",
-      "inserted_at",
-      "occurred_at",
-    ]);
-
-    const selectParts = [
-      `${idCol}::text AS id`,
-      `${contentCol}::text AS content`,
-      titleCol ? `${titleCol}::text AS title` : `''::text AS title`,
-      sourceCol ? `${sourceCol}::text AS source` : `''::text AS source`,
-      speakerCol ? `${speakerCol}::text AS speaker` : `''::text AS speaker`,
-      timeCol ? `${timeCol}::text AS occurred_at` : `NULL::text AS occurred_at`,
-    ];
-
-    const orderBy = timeCol ? `${timeCol} DESC NULLS LAST` : `${idCol} DESC`;
-    const remaining = limit - out.length;
-
-    try {
-      const { rows } = await getPool(databaseUrl).query<{
-        id: string;
-        content: string;
-        title: string;
-        source: string;
-        speaker: string;
-        occurred_at: string | null;
-      }>(
-        `SELECT ${selectParts.join(", ")}
-         FROM ${table}
-         WHERE COALESCE(TRIM(${contentCol}::text), '') <> ''
-           AND NOT EXISTS (
-             SELECT 1 FROM source_usage su
-             WHERE su.source_table = $1 AND su.source_id = ${idCol}::text
-           )
-         ORDER BY ${orderBy}
-         LIMIT $2`,
-        [table, remaining]
-      );
-
-      for (const row of rows) {
-        out.push({
-          kind: "external_transcript",
-          id: row.id,
-          sourceTable: table,
-          title: row.title || "",
-          content: row.content,
-          meta: [row.speaker && `Speaker: ${row.speaker}`, row.source && `Source: ${row.source}`]
-            .filter(Boolean)
-            .join(" · "),
-          occurredAt: row.occurred_at,
-          url: row.source?.startsWith("http") ? row.source : "",
-          category: "Transcript",
-        });
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(`Skipping transcript table "${table}": ${message}`);
-    }
+    out.push(...rows);
   }
-
   return out;
 }
 
@@ -283,22 +357,23 @@ export async function markDraftSourcesUsed(
   for (const [table, rows] of byTable) {
     const ids = rows.map((r) => r.id);
 
-    if (table === "transcripts" && (await tableExists(databaseUrl, "transcripts"))) {
-      await getPool(databaseUrl).query(
-        `UPDATE transcripts
-         SET used_in_issue_id = $2
-         WHERE id = ANY($1::uuid[])`,
-        [ids, issueId]
-      );
-    }
-
-    if (table === "findings" && (await tableExists(databaseUrl, "findings"))) {
-      await getPool(databaseUrl).query(
-        `UPDATE findings
-         SET used_in_issue_id = $2
-         WHERE id = ANY($1::uuid[])`,
-        [ids, issueId]
-      );
+    if (isSafeIdent(table) && (await tableExists(databaseUrl, table))) {
+      const columns = await getTableColumns(databaseUrl, table);
+      const idCol = pickColumn(columns, ID_CANDIDATES);
+      const usedCol = pickColumn(columns, ["used_in_issue_id"]);
+      if (idCol && usedCol) {
+        try {
+          await getPool(databaseUrl).query(
+            `UPDATE ${table}
+             SET ${usedCol} = $2::uuid
+             WHERE ${idCol}::text = ANY($1::text[])`,
+            [ids, issueId]
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`Could not mark ${table}.${usedCol}: ${message}`);
+        }
+      }
     }
 
     // Always record in source_usage for idempotency / external tables.
@@ -338,31 +413,72 @@ export async function createTranscript(
     recorded_at?: string;
   }
 ): Promise<DraftSource> {
+  if (!(await tableExists(databaseUrl, "transcripts"))) {
+    throw new Error("transcripts table does not exist");
+  }
+
+  const columns = await getTableColumns(databaseUrl, "transcripts");
+  const shape = resolveTranscriptShape(columns);
+  if (!shape) {
+    throw new Error(
+      "transcripts table needs an id column and a text/content/transcript column"
+    );
+  }
+
+  const insertCols: string[] = [shape.contentCol];
+  const values: unknown[] = [input.content.trim()];
+  const placeholders: string[] = ["$1"];
+
+  if (shape.titleCol) {
+    insertCols.push(shape.titleCol);
+    values.push(input.title?.trim() || "");
+    placeholders.push(`$${values.length}`);
+  }
+  if (shape.sourceCol) {
+    insertCols.push(shape.sourceCol);
+    values.push(input.source?.trim() || "");
+    placeholders.push(`$${values.length}`);
+  }
+  if (shape.speakerCol) {
+    insertCols.push(shape.speakerCol);
+    values.push(input.speaker?.trim() || "");
+    placeholders.push(`$${values.length}`);
+  }
+  if (shape.timeCol) {
+    insertCols.push(shape.timeCol);
+    values.push(input.recorded_at || null);
+    placeholders.push(`COALESCE($${values.length}::timestamptz, now())`);
+  }
+
+  const returning = [
+    `${shape.idCol}::text AS id`,
+    `${shape.contentCol}::text AS content`,
+    shape.titleCol ? `${shape.titleCol}::text AS title` : `''::text AS title`,
+    shape.sourceCol ? `${shape.sourceCol}::text AS source` : `''::text AS source`,
+    shape.speakerCol ? `${shape.speakerCol}::text AS speaker` : `''::text AS speaker`,
+    shape.timeCol ? `${shape.timeCol}::text AS recorded_at` : `NULL::text AS recorded_at`,
+  ];
+
   const { rows } = await getPool(databaseUrl).query<{
     id: string;
     title: string;
     content: string;
     source: string;
     speaker: string;
-    recorded_at: string;
+    recorded_at: string | null;
   }>(
-    `INSERT INTO transcripts (title, content, source, speaker, recorded_at)
-     VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, now()))
-     RETURNING id::text, title, content, source, speaker, recorded_at::text`,
-    [
-      input.title?.trim() || "",
-      input.content.trim(),
-      input.source?.trim() || "",
-      input.speaker?.trim() || "",
-      input.recorded_at || null,
-    ]
+    `INSERT INTO transcripts (${insertCols.join(", ")})
+     VALUES (${placeholders.join(", ")})
+     RETURNING ${returning.join(", ")}`,
+    values
   );
+
   const row = rows[0];
   return {
     kind: "transcript",
     id: row.id,
     sourceTable: "transcripts",
-    title: row.title,
+    title: row.title || "",
     content: row.content,
     meta: [row.speaker && `Speaker: ${row.speaker}`, row.source && `Source: ${row.source}`]
       .filter(Boolean)
@@ -388,14 +504,41 @@ export async function listTranscripts(
   }>
 > {
   if (!(await tableExists(databaseUrl, "transcripts"))) return [];
+  const columns = await getTableColumns(databaseUrl, "transcripts");
+  const shape = resolveTranscriptShape(columns);
+  if (!shape) return [];
+
   const unusedOnly = opts?.unusedOnly ?? false;
-  const { rows } = await getPool(databaseUrl).query(
-    `SELECT id::text, title, content, source, speaker, recorded_at::text, used_in_issue_id::text
-     FROM transcripts
-     ${unusedOnly ? "WHERE used_in_issue_id IS NULL" : ""}
-     ORDER BY recorded_at DESC, created_at DESC`
-  );
-  return rows;
+  const where = unusedOnly ? `WHERE ${unusedWhere(shape, 1)}` : "";
+  const params = unusedOnly ? ["transcripts"] : [];
+
+  const selectParts = [
+    `${shape.idCol}::text AS id`,
+    `${shape.contentCol}::text AS content`,
+    shape.titleCol ? `${shape.titleCol}::text AS title` : `''::text AS title`,
+    shape.sourceCol ? `${shape.sourceCol}::text AS source` : `''::text AS source`,
+    shape.speakerCol ? `${shape.speakerCol}::text AS speaker` : `''::text AS speaker`,
+    shape.timeCol ? `${shape.timeCol}::text AS recorded_at` : `NULL::text AS recorded_at`,
+    shape.usedCol
+      ? `${shape.usedCol}::text AS used_in_issue_id`
+      : `NULL::text AS used_in_issue_id`,
+  ];
+
+  try {
+    const { rows } = await getPool(databaseUrl).query(
+      `SELECT ${selectParts.join(", ")}
+       FROM transcripts
+       ${where}
+       ORDER BY ${orderBy(shape)}
+       LIMIT 200`,
+      params
+    );
+    return rows;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`listTranscripts failed: ${message}`);
+    return [];
+  }
 }
 
 export async function deleteTranscript(
@@ -403,8 +546,21 @@ export async function deleteTranscript(
   id: string
 ): Promise<boolean> {
   if (!(await tableExists(databaseUrl, "transcripts"))) return false;
+  const columns = await getTableColumns(databaseUrl, "transcripts");
+  const shape = resolveTranscriptShape(columns);
+  if (!shape) return false;
+
+  const unusedClause = shape.usedCol
+    ? `AND ${shape.usedCol} IS NULL`
+    : `AND NOT EXISTS (
+         SELECT 1 FROM source_usage su
+         WHERE su.source_table = 'transcripts' AND su.source_id = ${shape.idCol}::text
+       )`;
+
   const { rowCount } = await getPool(databaseUrl).query(
-    `DELETE FROM transcripts WHERE id = $1 AND used_in_issue_id IS NULL`,
+    `DELETE FROM transcripts
+     WHERE ${shape.idCol}::text = $1
+       ${unusedClause}`,
     [id]
   );
   return (rowCount ?? 0) > 0;
