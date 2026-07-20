@@ -7,41 +7,50 @@
   <meta name="description" content="Local news from the Tongass Narrows — subscribe to the weekly roundup.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <nav class="site-nav" aria-label="Primary">
-    <a href="/">Home</a>
-    <a href="/admin/">Admin</a>
-  </nav>
+  <div class="atmosphere" aria-hidden="true">
+    <div class="glow glow-a"></div>
+    <div class="glow glow-b"></div>
+    <svg class="tide tide-1" viewBox="0 0 1440 120" preserveAspectRatio="none">
+      <path d="M0,60 C240,20 480,100 720,60 C960,20 1200,100 1440,60 L1440,120 L0,120 Z"></path>
+    </svg>
+    <svg class="tide tide-2" viewBox="0 0 1440 120" preserveAspectRatio="none">
+      <path d="M0,70 C220,110 500,20 740,70 C980,120 1220,40 1440,70 L1440,120 L0,120 Z"></path>
+    </svg>
+  </div>
 
   <main class="hero">
     <div class="hero-inner">
+      <div class="mark" aria-hidden="true">
+        <span></span>
+      </div>
       <p class="eyebrow">Ketchikan, Alaska · Est. 2026</p>
-      <h1 class="brand"><span>The Ebb</span><span>&amp; Flow</span></h1>
+      <h1 class="brand">
+        <span class="brand-line">The Ebb</span>
+        <span class="brand-line amp">&amp; Flow</span>
+      </h1>
       <div class="rule" aria-hidden="true"></div>
-      <p class="lede">Local news from the Tongass Narrows — six stories worth your time, once a week.</p>
+      <p class="tag">Local news from the Tongass Narrows</p>
+      <p class="lede">Six stories worth your time, once a week — tides, town hall, and what’s opening on Main.</p>
 
-      <form class="form-shell" id="subscribe-form" novalidate>
-        <div class="form-row two">
+      <form class="subscribe" id="subscribe-form" novalidate>
+        <div class="fields">
           <label>
-            First name
+            <span>First name</span>
             <input type="text" name="first_name" autocomplete="given-name" placeholder="Neighbor">
           </label>
-          <label>
-            Email
+          <label class="grow">
+            <span>Email</span>
             <input type="email" name="email" autocomplete="email" required placeholder="you@example.com">
           </label>
-        </div>
-        <div class="actions">
           <button type="submit">Subscribe</button>
-          <span class="note">Free. Unsubscribe anytime.</span>
         </div>
+        <p class="note">Free weekly dispatch. Unsubscribe anytime.</p>
         <p class="message" id="subscribe-message" role="status" aria-live="polite"></p>
       </form>
-
-      <p class="footer-link">Already subscribed? Manage prefs from any issue footer.</p>
     </div>
   </main>
 

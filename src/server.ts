@@ -155,6 +155,12 @@ export function createServer(config: AppConfig) {
     }
   });
 
+  // Keep /admin unlisted: noindex + not linked from the public site.
+  app.use(["/admin", "/api/admin"], (_req, res, next) => {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    next();
+  });
+
   app.use(express.static(publicDir, { index: "index.html" }));
 
   app.get("/", (_req, res) => {
@@ -176,6 +182,7 @@ export function createServer(config: AppConfig) {
         .send(`Admin UI missing. Expected ${adminHtml}`);
       return;
     }
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
     res.sendFile(adminHtml);
   });
 
