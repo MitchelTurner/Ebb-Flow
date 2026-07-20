@@ -51,8 +51,8 @@ Or send from **Admin → Emails → Send now**.
 
 | URL | Purpose |
 |-----|---------|
-| `/` | Public subscribe form |
-| `/admin` | Login + dashboard (requires `ADMIN_PASSWORD`) |
+| `/` | Public subscribe form (no admin link) |
+| `/admin` | Unlisted newsroom dashboard (bookmark this; requires `ADMIN_PASSWORD`) |
 
 Admin tabs:
 
@@ -92,7 +92,7 @@ npm run db:migrate
 npm run db:seed
 ```
 
-4. Open your public URL → subscribe + `/admin`.
+4. Open your public URL to subscribe. Admin is unlisted at `/admin` (not linked from the site).
 5. Optional cron service: `npm run start:send` on `0 15 * * 1`.
 
 ## Editorial workflow

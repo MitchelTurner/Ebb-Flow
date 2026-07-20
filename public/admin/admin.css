@@ -9,7 +9,7 @@
   --line: #e6e0d5;
   --ok: #2f6b3a;
   --danger: #8b2e2e;
-  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
   --sans: "Figtree", "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -20,7 +20,8 @@ body {
   font-family: var(--sans);
   color: var(--ink);
   background:
-    linear-gradient(180deg, #e7efe8 0%, var(--cream) 35%, #ebe4d8 100%);
+    radial-gradient(900px 420px at 100% -10%, rgba(184, 151, 90, 0.14), transparent 55%),
+    linear-gradient(180deg, #e9eef0 0%, var(--cream) 40%, #ebe4d8 100%);
 }
 
 a { color: var(--navy); }
@@ -251,22 +252,51 @@ th {
   display: grid;
   place-items: center;
   padding: 1.5rem;
+  background:
+    radial-gradient(700px 360px at 80% 0%, rgba(184, 151, 90, 0.18), transparent 60%),
+    linear-gradient(165deg, #0f1d2a 0%, #16293a 55%, #1f3a4f 100%);
 }
 
 .login-box {
-  width: min(400px, 100%);
+  width: min(420px, 100%);
+  color: #f7f3ec;
+}
+
+.login-eyebrow {
+  margin: 0 0 0.65rem !important;
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #9fb0c0 !important;
 }
 
 .login-box h1 {
   font-family: var(--serif);
-  font-size: 2.2rem;
-  color: var(--navy);
-  margin: 0 0 0.35rem;
+  font-size: clamp(2.4rem, 8vw, 3.2rem);
+  line-height: 0.95;
+  color: #f7f3ec;
+  margin: 0 0 0.55rem;
 }
 
 .login-box p {
   margin: 0 0 1.25rem;
-  color: var(--muted);
+  color: rgba(247, 243, 236, 0.7);
+}
+
+.login-box label {
+  color: #9fb0c0;
+}
+
+.login-box input {
+  background: rgba(247, 243, 236, 0.08);
+  border-color: rgba(216, 201, 168, 0.35);
+  color: #f7f3ec;
+}
+
+.login-box button[type="submit"] {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--navy-deep);
 }
 
 .flash {
