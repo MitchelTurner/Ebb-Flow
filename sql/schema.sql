@@ -75,6 +75,28 @@ CREATE TABLE IF NOT EXISTS findings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Transcripts Claude analyzes into newsletter story drafts.
+CREATE TABLE IF NOT EXISTS transcripts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT '',
+  speaker TEXT NOT NULL DEFAULT '',
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  used_in_issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Tracks which external/source rows have already been drafted into an issue
+-- (used for discovered transcript tables that lack used_in_issue_id).
+CREATE TABLE IF NOT EXISTS source_usage (
+  source_table TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
+  used_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (source_table, source_id)
+);
+
 CREATE TABLE IF NOT EXISTS sends (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   issue_id UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
@@ -106,5 +128,7 @@ CREATE INDEX IF NOT EXISTS idx_issues_scheduled
   WHERE status = 'ready' AND scheduled_for IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_stories_issue_position ON stories (issue_id, position);
 CREATE INDEX IF NOT EXISTS idx_findings_unused ON findings (found_at DESC) WHERE used_in_issue_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_transcripts_unused ON transcripts (recorded_at DESC) WHERE used_in_issue_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_source_usage_issue ON source_usage (issue_id);
 CREATE INDEX IF NOT EXISTS idx_sends_issue ON sends (issue_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status, due_date NULLS LAST);

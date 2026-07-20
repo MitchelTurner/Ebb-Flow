@@ -230,7 +230,7 @@ export async function startServer(config: AppConfig): Promise<void> {
       const draft = await autoDraftFromNewestFindings(config);
       if (draft.drafted) {
         console.log(
-          `Auto-drafted issue ${draft.result?.issue.id} from ${draft.findingCount} findings`
+          `Auto-drafted issue ${draft.result?.issue.id} from ${draft.findingCount} ${draft.sourceKind || "source"}(s) in ${draft.sourceTable || "database"}`
         );
       } else {
         console.log(`Auto-draft skipped: ${draft.reason}`);

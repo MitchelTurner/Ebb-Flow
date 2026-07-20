@@ -146,7 +146,41 @@ ON CONFLICT (id) DO UPDATE SET
   issue_id = EXCLUDED.issue_id,
   updated_at = now();
 
--- Unused findings for Claude auto-draft demos (newer entries win).
+-- Unused transcripts for Claude auto-draft demos (newest recorded_at wins).
+INSERT INTO transcripts (id, title, content, source, speaker, recorded_at)
+VALUES
+  (
+    'dddddddd-dddd-dddd-dddd-ddddddddddd1',
+    'Harbor commission work session',
+    E'SPEAKER: Harbor Master Eli Stone\nWe''re pushing the fuel dock repair another week. The parts boat is delayed out of Seattle, so commercial boats should plan to top off in Ward Cove until further notice.\n\nSPEAKER: Commissioner Lane\nCan we put a notice at the ramp and email the fleet list tonight?\n\nSPEAKER: Harbor Master Eli Stone\nYes. Notice goes up today. I''ll send the fleet email before 5.',
+    'Harbor Commission',
+    'Eli Stone',
+    now() - interval '3 hours'
+  ),
+  (
+    'dddddddd-dddd-dddd-dddd-ddddddddddd2',
+    'Library board meeting',
+    E'SPEAKER: Board Chair Maya Ortiz\nMotion to pause late fees through September. All in favor?\n[Vote passes 5–0]\n\nSPEAKER: Staff librarian\nReturns are already up this week. Families are bringing bags of books back.\n\nSPEAKER: Board Chair Maya Ortiz\nCall it a summer reset. We''ll revisit fees in October.',
+    'Library Board',
+    'Maya Ortiz',
+    now() - interval '2 hours'
+  ),
+  (
+    'dddddddd-dddd-dddd-dddd-ddddddddddd3',
+    'Tourism desk standup',
+    E'SPEAKER: Ops lead\nTwo ships Thursday, one Friday. Downtown shuttle loop extends to 8 p.m. on ship days only.\n\nSPEAKER: Downtown liaison\nGangway times look clean. We''ll post the map boards by noon Wednesday.',
+    'Tourism Desk',
+    '',
+    now() - interval '45 minutes'
+  )
+ON CONFLICT (id) DO UPDATE SET
+  title = EXCLUDED.title,
+  content = EXCLUDED.content,
+  source = EXCLUDED.source,
+  speaker = EXCLUDED.speaker,
+  recorded_at = EXCLUDED.recorded_at;
+
+-- Unused findings (fallback when no transcripts are available).
 INSERT INTO findings (id, title, body, source_url, category, found_at)
 VALUES
   (

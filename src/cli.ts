@@ -136,7 +136,7 @@ Commands:
   seed                 Apply sql/seed.sql
   preview [--issue=ID] Render latest/ready issue HTML to .preview/
   generate --issue=ID  Use Claude to rewrite issue + stories from source notes
-  auto-draft           Draft a review issue from newest unused findings
+  auto-draft           Draft a review issue from newest unused transcripts
   send [--issue=ID] [--dry-run]
                        Send due scheduled/ready issues via Resend
   serve                HTTP server (preview, unsubscribe, cron routes)

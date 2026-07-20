@@ -86,5 +86,6 @@ export interface DashboardStats {
   ready_issues: number;
   open_tasks: number;
   unused_findings: number;
+  unused_transcripts: number;
   scheduled_issues: number;
 }

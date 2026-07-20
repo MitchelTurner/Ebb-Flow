@@ -62,7 +62,10 @@ export async function getDashboardStats(databaseUrl: string): Promise<DashboardS
       (SELECT COUNT(*)::int FROM issues WHERE status = 'draft') AS draft_issues,
       (SELECT COUNT(*)::int FROM issues WHERE status = 'ready') AS ready_issues,
       (SELECT COUNT(*)::int FROM tasks WHERE status IN ('todo', 'doing')) AS open_tasks,
-      (SELECT COUNT(*)::int FROM findings WHERE used_in_issue_id IS NULL) AS unused_findings,
+      COALESCE((SELECT COUNT(*)::int FROM findings WHERE used_in_issue_id IS NULL), 0)
+        AS unused_findings,
+      COALESCE((SELECT COUNT(*)::int FROM transcripts WHERE used_in_issue_id IS NULL), 0)
+        AS unused_transcripts,
       (SELECT COUNT(*)::int FROM issues
         WHERE status = 'ready' AND scheduled_for IS NOT NULL AND scheduled_for > now()) AS scheduled_issues
   `);

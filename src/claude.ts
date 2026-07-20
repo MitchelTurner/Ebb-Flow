@@ -24,7 +24,7 @@ const SYSTEM = `You are the newsroom editor for "The Ebb & Flow", a warm weekly 
 
 Voice: neighborly, clear, specific, never corporate. Short sentences. No emojis. No hype.
 
-You rewrite rough story notes into polished newsletter copy that fits a 6-story weekly email.`;
+You ANALYZE raw database transcripts and source notes, extract the newsworthy facts, and rewrite them into polished newsletter copy that fits a 6-story weekly email template.`;
 
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -65,13 +65,15 @@ export async function generateIssueCopy(params: {
   }
 
   const client = new Anthropic({ apiKey: params.apiKey });
-  const userPrompt = `Rewrite this week's issue from the database story updates below.
+  const userPrompt = `Analyze the database transcripts / source texts below and draft this week's Ebb & Flow email.
 
 Issue date: ${params.issue.issue_date}
 Volume label: ${params.issue.volume_label || "(none)"}
 Current subject: ${params.issue.subject}
 
-Stories (prefer source_notes when present; otherwise polish existing fields):
+Each item's source_notes may contain a full TRANSCRIPT. Read the transcript carefully, extract the real news, and write newsletter-ready fields.
+
+Inputs:
 ${JSON.stringify(params.stories.map(storyInput), null, 2)}
 
 Return ONLY valid JSON matching this shape:
@@ -86,7 +88,7 @@ Return ONLY valid JSON matching this shape:
       "toc_title": "short TOC title",
       "title": "full headline",
       "eyebrow": "Section · detail",
-      "summary": "2-3 sentences",
+      "summary": "2-3 sentences grounded in the transcript",
       "why_it_matters": "one short sentence",
       "quote": "optional quote text without surrounding quotation marks, or null",
       "quote_attribution": "optional attribution without leading em dash, or null"
@@ -95,11 +97,12 @@ Return ONLY valid JSON matching this shape:
 }
 
 Rules:
+- Analyze each transcript/source_notes block; do not ignore long transcript text.
 - Include every input story position in the output.
-- Position 1 is the lead story and should be the strongest.
-- Keep facts faithful to the notes; do not invent votes, names, dates, or quotes.
-- If a quote is not supported by the notes, set quote and quote_attribution to null.
-- coming_up should be 2-4 short teaser bullets for next week.`;
+- Position 1 is the lead story and should be the strongest news from the transcripts.
+- Keep facts faithful to the transcripts; do not invent votes, names, dates, or quotes.
+- If a quote is not clearly present in the transcript, set quote and quote_attribution to null.
+- coming_up should be 2-4 short teaser bullets suggested by unfinished threads in the transcripts.`;
 
   const response = await client.messages.create({
     model: CLAUDE_MODEL,
