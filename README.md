@@ -115,9 +115,10 @@ Set on Railway:
 ```bash
 AI-KEY=sk-ant-...
 # optional:
-# ANTHROPIC_MODEL=claude-sonnet-4-20250514
 # ANTHROPIC_AUTO_WRITE=true   # rewrite issue whenever a story with source_notes is saved
 ```
+
+Drafting always uses **Claude Fable 5** (`claude-fable-5`) — the model is not configurable.
 
 CLI:
 

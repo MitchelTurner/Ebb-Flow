@@ -52,9 +52,11 @@ function storyInput(story: Story) {
   };
 }
 
+/** Newsletter drafting is locked to Claude Fable 5 only. */
+export const CLAUDE_MODEL = "claude-fable-5" as const;
+
 export async function generateIssueCopy(params: {
   apiKey: string;
-  model: string;
   issue: Issue;
   stories: Story[];
 }): Promise<GeneratedIssueCopy> {
@@ -100,8 +102,8 @@ Rules:
 - coming_up should be 2-4 short teaser bullets for next week.`;
 
   const response = await client.messages.create({
-    model: params.model,
-    max_tokens: 4096,
+    model: CLAUDE_MODEL,
+    max_tokens: 16000,
     system: SYSTEM,
     messages: [{ role: "user", content: userPrompt }],
   });

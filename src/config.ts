@@ -27,8 +27,8 @@ export function getConfig() {
     appUrl: (optional("APP_URL") ?? "http://localhost:3000").replace(/\/$/, ""),
     adminPassword: optional("ADMIN_PASSWORD"),
     anthropicApiKey: optional("AI-KEY") ?? optional("ANTHROPIC_API_KEY"),
-    anthropicModel:
-      optional("ANTHROPIC_MODEL") ?? "claude-sonnet-4-20250514",
+    /** Always Claude Fable 5 — not overridable. */
+    anthropicModel: "claude-fable-5" as const,
     /** When true, saving a story with source_notes triggers Claude rewrite of that issue. */
     anthropicAutoWrite: bool("ANTHROPIC_AUTO_WRITE", false),
     issueId: optional("ISSUE_ID"),
