@@ -86,7 +86,14 @@ async function bootstrap() {
 }
 
 async function refreshAll() {
-  await Promise.all([loadStats(), loadSubscribers(), loadIssues(), loadTasks()]);
+  await Promise.all([
+    loadStats(),
+    loadSubscribers(),
+    loadIssues(),
+    loadTasks(),
+    loadReview(),
+    loadFindings(),
+  ]);
 }
 
 async function loadStats() {
@@ -94,9 +101,10 @@ async function loadStats() {
   if (!statsEl) return;
   const items = [
     ["Active subscribers", stats.active_subscribers],
-    ["Total subscribers", stats.total_subscribers],
-    ["Draft issues", stats.draft_issues],
-    ["Ready to send", stats.ready_issues],
+    ["Unused findings", stats.unused_findings],
+    ["Drafts to review", stats.draft_issues],
+    ["Scheduled", stats.scheduled_issues],
+    ["Ready / due", stats.ready_issues],
     ["Open tasks", stats.open_tasks],
   ];
   statsEl.innerHTML = items
@@ -105,6 +113,96 @@ async function loadStats() {
         `<div class="stat"><strong>${value}</strong><span>${label}</span></div>`
     )
     .join("");
+}
+
+async function runAutoDraft() {
+  flash(appFlash, "Drafting from newest findings with Claude Fable 5…", "");
+  try {
+    const { draft } = await api("/api/admin/auto-draft", {
+      method: "POST",
+      body: "{}",
+    });
+    if (!draft.drafted) {
+      flash(appFlash, draft.reason || "Nothing to draft.", "err");
+      return;
+    }
+    flash(
+      appFlash,
+      `Draft ready from ${draft.findingCount} findings — review & schedule it.`,
+      "ok"
+    );
+    selectTab("review");
+    await refreshAll();
+    if (draft.result?.issue) fillIssueForm(draft.result.issue);
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  }
+}
+
+async function loadReview() {
+  const { issues } = await api("/api/admin/review");
+  const body = document.getElementById("review-body");
+  const select = document.getElementById("schedule-issue-select");
+  if (body) {
+    body.innerHTML = issues.length
+      ? issues
+          .map((issue) => {
+            const scheduled = issue.scheduled_for
+              ? new Date(issue.scheduled_for).toLocaleString()
+              : "—";
+            return `<tr>
+              <td>${escapeHtml(issue.subject)}</td>
+              <td><span class="badge ${escapeHtml(issue.status)}">${escapeHtml(issue.status)}</span></td>
+              <td>${escapeHtml(scheduled)}</td>
+              <td class="row-actions">
+                <button type="button" class="secondary" data-review-edit="${issue.id}">Review</button>
+                <a class="btn secondary" href="/preview/${issue.id}" target="_blank" rel="noopener">Preview</a>
+              </td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="4" class="muted">No drafts yet. Add findings, then draft with Claude.</td></tr>`;
+  }
+  if (select instanceof HTMLSelectElement) {
+    select.innerHTML = issues
+      .filter((i) => i.status === "draft" || i.status === "ready")
+      .map(
+        (issue) =>
+          `<option value="${issue.id}">${escapeHtml(issue.subject)} (${issue.status})</option>`
+      )
+      .join("");
+  }
+}
+
+async function loadFindings() {
+  const { findings } = await api("/api/admin/findings");
+  const body = document.getElementById("findings-body");
+  if (!body) return;
+  body.innerHTML = findings.length
+    ? findings
+        .map((finding) => {
+          const when = finding.found_at
+            ? new Date(finding.found_at).toLocaleString()
+            : "—";
+          const used = finding.used_in_issue_id ? "used" : "unused";
+          return `<tr>
+            <td>${escapeHtml(when)}</td>
+            <td>
+              <strong>${escapeHtml(finding.title || "(untitled)")}</strong>
+              <div class="muted">${escapeHtml(finding.body.slice(0, 160))}${finding.body.length > 160 ? "…" : ""}</div>
+            </td>
+            <td><span class="badge ${used === "unused" ? "todo" : "done"}">${used}</span></td>
+            <td class="row-actions">
+              ${
+                finding.used_in_issue_id
+                  ? ""
+                  : `<button type="button" class="danger" data-finding-delete="${finding.id}">Delete</button>`
+              }
+            </td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="4" class="muted">No findings yet.</td></tr>`;
 }
 
 async function loadSubscribers() {
@@ -200,6 +298,14 @@ async function loadTasks() {
     .join("");
 }
 
+function toLocalInputValue(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function fillIssueForm(issue) {
   if (!(issueForm instanceof HTMLFormElement)) return;
   selectedIssueId = issue.id;
@@ -219,6 +325,10 @@ function fillIssueForm(issue) {
     } else {
       field.value = value == null ? "" : String(value);
     }
+  }
+  const scheduledField = issueForm.elements.namedItem("scheduled_for_display");
+  if (scheduledField instanceof HTMLInputElement) {
+    scheduledField.value = toLocalInputValue(issue.scheduled_for);
   }
   loadStories(issue.id);
 }
@@ -440,6 +550,87 @@ async function sendSelected(dryRun) {
 
 document.getElementById("send-dry-btn")?.addEventListener("click", () => sendSelected(true));
 document.getElementById("send-live-btn")?.addEventListener("click", () => sendSelected(false));
+
+document.getElementById("overview-auto-draft-btn")?.addEventListener("click", runAutoDraft);
+document.getElementById("review-auto-draft-btn")?.addEventListener("click", runAutoDraft);
+
+document.getElementById("review-body")?.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || !target.dataset.reviewEdit) return;
+  const issue = issuesCache.find((i) => i.id === target.dataset.reviewEdit);
+  if (issue) {
+    selectTab("issues");
+    fillIssueForm(issue);
+  } else {
+    await loadIssues();
+    const again = issuesCache.find((i) => i.id === target.dataset.reviewEdit);
+    if (again) {
+      selectTab("issues");
+      fillIssueForm(again);
+    }
+  }
+});
+
+document.getElementById("schedule-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!(form instanceof HTMLFormElement)) return;
+  const data = new FormData(form);
+  const issueId = String(data.get("issue_select") ?? "");
+  const local = String(data.get("scheduled_for") ?? "");
+  if (!issueId || !local) {
+    flash(appFlash, "Pick an issue and delivery time.", "err");
+    return;
+  }
+  const scheduled_for = new Date(local).toISOString();
+  try {
+    await api(`/api/admin/issues/${issueId}/schedule`, {
+      method: "POST",
+      body: JSON.stringify({ scheduled_for }),
+    });
+    flash(appFlash, "Issue approved and scheduled.", "ok");
+    await refreshAll();
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  }
+});
+
+document.getElementById("finding-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!(form instanceof HTMLFormElement)) return;
+  const data = Object.fromEntries(new FormData(form).entries());
+  if (data.found_at) {
+    data.found_at = new Date(String(data.found_at)).toISOString();
+  } else {
+    delete data.found_at;
+  }
+  try {
+    await api("/api/admin/findings", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    form.reset();
+    flash(appFlash, "Finding added.", "ok");
+    await Promise.all([loadFindings(), loadStats()]);
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  }
+});
+
+document.getElementById("findings-body")?.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || !target.dataset.findingDelete) return;
+  if (!confirm("Delete this unused finding?")) return;
+  try {
+    await api(`/api/admin/findings/${target.dataset.findingDelete}`, {
+      method: "DELETE",
+    });
+    await Promise.all([loadFindings(), loadStats()]);
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  }
+});
 
 document.getElementById("generate-claude-btn")?.addEventListener("click", async () => {
   if (!selectedIssueId) {

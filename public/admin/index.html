@@ -38,6 +38,8 @@
 
     <nav class="tabs" role="tablist" aria-label="Admin sections">
       <button class="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
+      <button class="tab" type="button" data-tab="review" aria-selected="false">Review &amp; schedule</button>
+      <button class="tab" type="button" data-tab="findings" aria-selected="false">Findings</button>
       <button class="tab" type="button" data-tab="subscribers" aria-selected="false">Subscribers</button>
       <button class="tab" type="button" data-tab="issues" aria-selected="false">Emails</button>
       <button class="tab" type="button" data-tab="tasks" aria-selected="false">Tasks</button>
@@ -47,7 +49,61 @@
 
     <section id="panel-overview" class="panel" data-panel="overview">
       <div class="stats" id="stats"></div>
-      <p class="muted">Use Emails to draft/send issues. Use Tasks for your weekly checklist.</p>
+      <p class="muted">Newest unused findings are auto-drafted with Claude Fable 5 into Review. Approve and schedule delivery there.</p>
+      <div class="toolbar" style="margin-top:1rem">
+        <button type="button" id="overview-auto-draft-btn">Draft from newest findings</button>
+      </div>
+    </section>
+
+    <section id="panel-review" class="panel hidden" data-panel="review">
+      <div class="section-head">
+        <h2>Review &amp; schedule</h2>
+        <button type="button" id="review-auto-draft-btn">Draft from newest findings</button>
+      </div>
+      <p class="muted">Claude drafts stay in <strong>draft</strong> until you schedule delivery. Cron sends when <code>scheduled_for</code> is due.</p>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr><th>Subject</th><th>Status</th><th>Scheduled</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="review-body"></tbody>
+        </table>
+      </div>
+      <form id="schedule-form" class="grid-form cols-3" style="margin-top:1rem">
+        <input type="hidden" name="issue_id">
+        <label>Issue to schedule
+          <select name="issue_select" id="schedule-issue-select"></select>
+        </label>
+        <label>Deliver at
+          <input type="datetime-local" name="scheduled_for" required>
+        </label>
+        <label>&nbsp;<button type="submit">Approve &amp; schedule</button></label>
+      </form>
+    </section>
+
+    <section id="panel-findings" class="panel hidden" data-panel="findings">
+      <div class="section-head">
+        <h2>Findings</h2>
+      </div>
+      <p class="muted">Add newer database findings here. Unused newest entries are what Claude auto-writes into draft emails.</p>
+      <form id="finding-form" class="grid-form cols-2">
+        <label>Title <input name="title" placeholder="Optional short label"></label>
+        <label>Category <input name="category" placeholder="Local Government"></label>
+        <label style="grid-column:1/-1">Finding / update
+          <textarea name="body" required placeholder="Council voted 4–3 on the budget… quote from Mayor Reyes…"></textarea>
+        </label>
+        <label>Source URL <input name="source_url" placeholder="https://…"></label>
+        <label>Found at <input type="datetime-local" name="found_at"></label>
+        <div><button type="submit">Add finding</button></div>
+      </form>
+      <div style="overflow:auto; margin-top:1rem">
+        <table>
+          <thead>
+            <tr><th>When</th><th>Finding</th><th>Used?</th><th></th></tr>
+          </thead>
+          <tbody id="findings-body"></tbody>
+        </table>
+      </div>
     </section>
 
     <section id="panel-subscribers" class="panel hidden" data-panel="subscribers">
@@ -113,9 +169,12 @@
           <label>Tip headline <input name="tip_headline"></label>
           <label>Postal address <input name="postal_address"></label>
           <label style="grid-column:1/-1">Tip body <textarea name="tip_body"></textarea></label>
+          <label>Scheduled for
+            <input type="datetime-local" name="scheduled_for_display" disabled>
+          </label>
           <div style="grid-column:1/-1; display:flex; gap:0.5rem; flex-wrap:wrap">
             <button type="submit">Save issue</button>
-            <button type="button" class="secondary" id="generate-claude-btn">Write with Claude</button>
+            <button type="button" class="secondary" id="generate-claude-btn">Rewrite with Claude</button>
             <button type="button" class="secondary" id="send-dry-btn">Dry-run send</button>
             <button type="button" id="send-live-btn">Send now</button>
           </div>

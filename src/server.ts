@@ -11,8 +11,9 @@ import {
   runSqlFile,
   unsubscribeByToken,
 } from "./db.js";
+import { autoDraftFromNewestFindings } from "./autoDraft.js";
 import { renderIssueEmail } from "./render.js";
-import { sendNewsletter } from "./send.js";
+import { sendDueNewsletters } from "./send.js";
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 const indexHtml = join(publicDir, "index.html");
@@ -148,8 +149,27 @@ export function createServer(config: AppConfig) {
     }
 
     try {
-      const result = await sendNewsletter(config);
-      res.json({ ok: true, result });
+      const results = await sendDueNewsletters(config);
+      res.json({ ok: true, results });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, error: message });
+    }
+  });
+
+  app.post("/cron/auto-draft", async (req, res) => {
+    const secret = process.env.CRON_SECRET?.trim();
+    if (secret) {
+      const header = req.get("authorization") ?? "";
+      if (header !== `Bearer ${secret}`) {
+        res.status(401).json({ error: "unauthorized" });
+        return;
+      }
+    }
+
+    try {
+      const draft = await autoDraftFromNewestFindings(config);
+      res.json({ ok: true, draft });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ ok: false, error: message });
@@ -203,6 +223,22 @@ export async function startServer(config: AppConfig): Promise<void> {
 
   // Schema uses IF NOT EXISTS, so this is safe on every boot.
   await ensureSchema(config.databaseUrl);
+
+  if (config.autoDraftFromFindings) {
+    try {
+      const draft = await autoDraftFromNewestFindings(config);
+      if (draft.drafted) {
+        console.log(
+          `Auto-drafted issue ${draft.result?.issue.id} from ${draft.findingCount} findings`
+        );
+      } else {
+        console.log(`Auto-draft skipped: ${draft.reason}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`Auto-draft failed: ${message}`);
+    }
+  }
 
   const app = createServer(config);
   await new Promise<void>((resolve) => {

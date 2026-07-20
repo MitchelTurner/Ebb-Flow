@@ -102,10 +102,10 @@ If you ever see `relation "subscribers" does not exist`, redeploy the web servic
 
 ## Editorial workflow
 
-1. In Admin → **Emails**, create a draft issue.
-2. For each story, paste raw updates into **Source notes** and save (title can be a stub).
-3. Click **Write with Claude** to draft subject, preheader, intro, coming-up, and polished story copy from those notes.
-4. Preview, set status to **ready**, then **Send now** (or wait for cron).
+1. Add **Findings** (newer DB updates/tips) in Admin → Findings, or insert into the `findings` table.
+2. Claude Fable 5 **auto-drafts** a review issue from the newest unused findings (on boot, `/cron/auto-draft`, or Admin → Draft from newest findings).
+3. In **Review & schedule**, preview the draft, edit if needed, then **Approve & schedule** a delivery time.
+4. Cron `POST /cron/send` (or `npm run start:send`) delivers due `ready` issues when `scheduled_for` has passed.
 5. After send, status becomes `sent`.
 
 ### Claude auto-write
@@ -114,8 +114,8 @@ Set on Railway:
 
 ```bash
 AI-KEY=sk-ant-...
-# optional:
-# ANTHROPIC_AUTO_WRITE=true   # rewrite issue whenever a story with source_notes is saved
+AUTO_DRAFT_FROM_FINDINGS=true
+# FINDINGS_BATCH_SIZE=6
 ```
 
 Drafting always uses **Claude Fable 5** (`claude-fable-5`) — the model is not configurable.
@@ -123,7 +123,9 @@ Drafting always uses **Claude Fable 5** (`claude-fable-5`) — the model is not 
 CLI:
 
 ```bash
+npm run auto-draft
 npm run generate -- --issue=<issue-uuid>
+npm run send   # sends all due scheduled/ready issues
 ```
 
 ## Template tags

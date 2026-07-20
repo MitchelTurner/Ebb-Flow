@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import type {
   DashboardStats,
+  Finding,
   Issue,
   IssueStatus,
   Story,
@@ -20,7 +21,7 @@ const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ISSUE_SELECT = `id, issue_date::text, volume_label, subject, preheader, intro,
   weather, high_tides, low_tides, high_tide_label, coming_up,
   cta_url, cta_label, tip_headline, tip_body, postal_address, status,
-  created_at::text, updated_at::text, sent_at::text`;
+  scheduled_for::text, created_at::text, updated_at::text, sent_at::text`;
 
 let pool: pg.Pool | undefined;
 
@@ -60,7 +61,10 @@ export async function getDashboardStats(databaseUrl: string): Promise<DashboardS
       (SELECT COUNT(*)::int FROM subscribers) AS total_subscribers,
       (SELECT COUNT(*)::int FROM issues WHERE status = 'draft') AS draft_issues,
       (SELECT COUNT(*)::int FROM issues WHERE status = 'ready') AS ready_issues,
-      (SELECT COUNT(*)::int FROM tasks WHERE status IN ('todo', 'doing')) AS open_tasks
+      (SELECT COUNT(*)::int FROM tasks WHERE status IN ('todo', 'doing')) AS open_tasks,
+      (SELECT COUNT(*)::int FROM findings WHERE used_in_issue_id IS NULL) AS unused_findings,
+      (SELECT COUNT(*)::int FROM issues
+        WHERE status = 'ready' AND scheduled_for IS NOT NULL AND scheduled_for > now()) AS scheduled_issues
   `);
   return rows[0];
 }
@@ -138,14 +142,44 @@ export async function getIssueForSend(
     return rows[0] ?? null;
   }
 
+  // Prefer due scheduled issues, then unscheduled ready issues.
   const { rows } = await db.query<Issue>(
     `SELECT ${ISSUE_SELECT}
      FROM issues
      WHERE status = 'ready'
-     ORDER BY issue_date DESC, created_at DESC
+       AND (scheduled_for IS NULL OR scheduled_for <= now())
+     ORDER BY
+       CASE WHEN scheduled_for IS NULL THEN 1 ELSE 0 END,
+       scheduled_for ASC NULLS LAST,
+       issue_date DESC,
+       created_at DESC
      LIMIT 1`
   );
   return rows[0] ?? null;
+}
+
+export async function listDueIssues(databaseUrl: string): Promise<Issue[]> {
+  const { rows } = await getPool(databaseUrl).query<Issue>(
+    `SELECT ${ISSUE_SELECT}
+     FROM issues
+     WHERE status = 'ready'
+       AND (scheduled_for IS NULL OR scheduled_for <= now())
+     ORDER BY scheduled_for ASC NULLS LAST, created_at ASC`
+  );
+  return rows;
+}
+
+export async function listReviewIssues(databaseUrl: string): Promise<Issue[]> {
+  const { rows } = await getPool(databaseUrl).query<Issue>(
+    `SELECT ${ISSUE_SELECT}
+     FROM issues
+     WHERE status IN ('draft', 'ready')
+     ORDER BY
+       CASE status WHEN 'draft' THEN 0 ELSE 1 END,
+       scheduled_for ASC NULLS LAST,
+       created_at DESC`
+  );
+  return rows;
 }
 
 export async function listIssues(databaseUrl: string): Promise<Issue[]> {
@@ -166,9 +200,9 @@ export async function createIssue(
     `INSERT INTO issues (
        issue_date, volume_label, subject, preheader, intro,
        weather, high_tides, low_tides, high_tide_label, coming_up,
-       cta_url, cta_label, tip_headline, tip_body, postal_address, status
+       cta_url, cta_label, tip_headline, tip_body, postal_address, status, scheduled_for
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17
      )
      RETURNING ${ISSUE_SELECT}`,
     [
@@ -188,6 +222,7 @@ export async function createIssue(
       input.tip_body ?? "Just hit reply — every message reaches the newsroom directly.",
       input.postal_address ?? "",
       input.status ?? "draft",
+      input.scheduled_for ?? null,
     ]
   );
   return rows[0];
@@ -225,6 +260,7 @@ export async function updateIssue(
        tip_body = $15,
        postal_address = $16,
        status = $17,
+       scheduled_for = $18,
        updated_at = now()
      WHERE id = $1
      RETURNING ${ISSUE_SELECT}`,
@@ -246,7 +282,25 @@ export async function updateIssue(
       next.tip_body,
       next.postal_address,
       next.status,
+      next.scheduled_for ?? null,
     ]
+  );
+  return rows[0] ?? null;
+}
+
+export async function scheduleIssue(
+  databaseUrl: string,
+  id: string,
+  scheduledFor: string
+): Promise<Issue | null> {
+  const { rows } = await getPool(databaseUrl).query<Issue>(
+    `UPDATE issues
+     SET status = 'ready',
+         scheduled_for = $2::timestamptz,
+         updated_at = now()
+     WHERE id = $1 AND status IN ('draft', 'ready')
+     RETURNING ${ISSUE_SELECT}`,
+    [id, scheduledFor]
   );
   return rows[0] ?? null;
 }
@@ -261,7 +315,7 @@ export async function deleteIssue(databaseUrl: string, id: string): Promise<bool
 
 const STORY_SELECT = `id, issue_id, position, toc_title, title, eyebrow, summary,
   why_it_matters, url, image_url, quote, quote_attribution,
-  COALESCE(source_notes, '') AS source_notes`;
+  COALESCE(source_notes, '') AS source_notes, finding_id`;
 
 export async function getStories(
   databaseUrl: string,
@@ -283,6 +337,7 @@ export async function upsertStory(
   input: Omit<Story, "id" | "issue_id"> & { id?: string }
 ): Promise<Story> {
   const sourceNotes = input.source_notes ?? "";
+  const findingId = input.finding_id ?? null;
 
   if (input.id) {
     const { rows } = await getPool(databaseUrl).query<Story>(
@@ -297,7 +352,8 @@ export async function upsertStory(
          image_url = $10,
          quote = $11,
          quote_attribution = $12,
-         source_notes = $13
+         source_notes = $13,
+         finding_id = $14
        WHERE id = $1 AND issue_id = $2
        RETURNING ${STORY_SELECT}`,
       [
@@ -314,6 +370,7 @@ export async function upsertStory(
         input.quote,
         input.quote_attribution,
         sourceNotes,
+        findingId,
       ]
     );
     if (!rows[0]) throw new Error("Story not found");
@@ -323,8 +380,8 @@ export async function upsertStory(
   const { rows } = await getPool(databaseUrl).query<Story>(
     `INSERT INTO stories (
        issue_id, position, toc_title, title, eyebrow, summary,
-       why_it_matters, url, image_url, quote, quote_attribution, source_notes
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       why_it_matters, url, image_url, quote, quote_attribution, source_notes, finding_id
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      ON CONFLICT (issue_id, position) DO UPDATE SET
        toc_title = EXCLUDED.toc_title,
        title = EXCLUDED.title,
@@ -335,7 +392,8 @@ export async function upsertStory(
        image_url = EXCLUDED.image_url,
        quote = EXCLUDED.quote,
        quote_attribution = EXCLUDED.quote_attribution,
-       source_notes = EXCLUDED.source_notes
+       source_notes = EXCLUDED.source_notes,
+       finding_id = EXCLUDED.finding_id
      RETURNING ${STORY_SELECT}`,
     [
       issueId,
@@ -350,6 +408,7 @@ export async function upsertStory(
       input.quote,
       input.quote_attribution,
       sourceNotes,
+      findingId,
     ]
   );
   return rows[0];
@@ -547,6 +606,88 @@ export async function deleteTask(databaseUrl: string, id: string): Promise<boole
     [id]
   );
   return (rowCount ?? 0) > 0;
+}
+
+const FINDING_SELECT = `id, title, body, source_url, category,
+  found_at::text, used_in_issue_id, created_at::text`;
+
+export async function listFindings(
+  databaseUrl: string,
+  opts?: { unusedOnly?: boolean }
+): Promise<Finding[]> {
+  const unusedOnly = opts?.unusedOnly ?? false;
+  const { rows } = await getPool(databaseUrl).query<Finding>(
+    `SELECT ${FINDING_SELECT}
+     FROM findings
+     ${unusedOnly ? "WHERE used_in_issue_id IS NULL" : ""}
+     ORDER BY found_at DESC, created_at DESC`
+  );
+  return rows;
+}
+
+export async function getNewestUnusedFindings(
+  databaseUrl: string,
+  limit = 6
+): Promise<Finding[]> {
+  const { rows } = await getPool(databaseUrl).query<Finding>(
+    `SELECT ${FINDING_SELECT}
+     FROM findings
+     WHERE used_in_issue_id IS NULL
+     ORDER BY found_at DESC, created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+export async function createFinding(
+  databaseUrl: string,
+  input: {
+    title?: string;
+    body: string;
+    source_url?: string;
+    category?: string;
+    found_at?: string;
+  }
+): Promise<Finding> {
+  const { rows } = await getPool(databaseUrl).query<Finding>(
+    `INSERT INTO findings (title, body, source_url, category, found_at)
+     VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, now()))
+     RETURNING ${FINDING_SELECT}`,
+    [
+      input.title?.trim() || "",
+      input.body.trim(),
+      input.source_url?.trim() || "",
+      input.category?.trim() || "",
+      input.found_at || null,
+    ]
+  );
+  return rows[0];
+}
+
+export async function deleteFinding(
+  databaseUrl: string,
+  id: string
+): Promise<boolean> {
+  const { rowCount } = await getPool(databaseUrl).query(
+    `DELETE FROM findings WHERE id = $1 AND used_in_issue_id IS NULL`,
+    [id]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+export async function markFindingsUsed(
+  databaseUrl: string,
+  findingIds: string[],
+  issueId: string
+): Promise<void> {
+  if (findingIds.length === 0) return;
+  await getPool(databaseUrl).query(
+    `UPDATE findings
+     SET used_in_issue_id = $2
+     WHERE id = ANY($1::uuid[])`,
+    [findingIds, issueId]
+  );
 }
 
 export type { IssueStatus, SubscriberStatus, TaskStatus };

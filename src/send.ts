@@ -4,6 +4,7 @@ import {
   getActiveSubscribers,
   getIssueForSend,
   getStories,
+  listDueIssues,
   markIssueSending,
   markIssueSent,
   recordSend,
@@ -19,19 +20,49 @@ export interface SendResult {
   dryRun: boolean;
 }
 
+/** Send all due scheduled/ready issues (used by cron). */
+export async function sendDueNewsletters(
+  config: AppConfig
+): Promise<SendResult[]> {
+  if (config.issueId) {
+    return [await sendNewsletter(config)];
+  }
+
+  const due = await listDueIssues(config.databaseUrl);
+  if (due.length === 0) {
+    throw new Error("No due ready issues to send");
+  }
+
+  const results: SendResult[] = [];
+  for (const issue of due) {
+    results.push(await sendNewsletter({ ...config, issueId: issue.id }));
+  }
+  return results;
+}
+
 export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
   const issue = await getIssueForSend(config.databaseUrl, config.issueId);
   if (!issue) {
     throw new Error(
       config.issueId
         ? `Issue not found: ${config.issueId}`
-        : "No issue with status 'ready' found"
+        : "No due ready issue found (check scheduled_for)"
     );
   }
 
   if (!["ready", "sending"].includes(issue.status) && !config.dryRun) {
     throw new Error(
       `Issue ${issue.id} has status '${issue.status}' (expected ready)`
+    );
+  }
+
+  if (
+    issue.scheduled_for &&
+    new Date(issue.scheduled_for).getTime() > Date.now() &&
+    !config.dryRun
+  ) {
+    throw new Error(
+      `Issue ${issue.id} is scheduled for ${issue.scheduled_for} and is not due yet`
     );
   }
 

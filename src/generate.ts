@@ -77,6 +77,7 @@ export async function generateAndSaveIssue(
       quote: copy.quote,
       quote_attribution: copy.quote_attribution,
       source_notes: story.source_notes,
+      finding_id: story.finding_id,
     });
     savedStories.push(saved);
   }

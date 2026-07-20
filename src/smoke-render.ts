@@ -35,6 +35,7 @@ const issue: Issue = {
   tip_body: "Just hit reply.",
   postal_address: "123 Main Street",
   status: "ready",
+  scheduled_for: null,
 };
 
 const stories: Story[] = [1, 2, 3, 4, 5, 6].map((position) => ({
@@ -54,6 +55,7 @@ const stories: Story[] = [1, 2, 3, 4, 5, 6].map((position) => ({
   quote: position === 1 ? "A memorable quote." : null,
   quote_attribution: position === 1 ? "Someone Notable" : null,
   source_notes: `Raw notes for story ${position}`,
+  finding_id: null,
 }));
 
 const html = renderIssueEmail({

@@ -31,6 +31,7 @@ export interface Issue {
   tip_body: string;
   postal_address: string;
   status: IssueStatus;
+  scheduled_for: string | null;
   created_at?: string;
   updated_at?: string;
   sent_at?: string | null;
@@ -51,6 +52,18 @@ export interface Story {
   quote_attribution: string | null;
   /** Raw reporter/editor notes Claude uses to draft polished copy. */
   source_notes: string;
+  finding_id: string | null;
+}
+
+export interface Finding {
+  id: string;
+  title: string;
+  body: string;
+  source_url: string;
+  category: string;
+  found_at: string;
+  used_in_issue_id: string | null;
+  created_at?: string;
 }
 
 export interface Task {
@@ -72,4 +85,6 @@ export interface DashboardStats {
   draft_issues: number;
   ready_issues: number;
   open_tasks: number;
+  unused_findings: number;
+  scheduled_issues: number;
 }

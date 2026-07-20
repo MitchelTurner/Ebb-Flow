@@ -32,10 +32,14 @@ CREATE TABLE IF NOT EXISTS issues (
   postal_address TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'draft'
     CHECK (status IN ('draft', 'ready', 'sending', 'sent')),
+  scheduled_for TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   sent_at TIMESTAMPTZ
 );
+
+-- Existing DBs may predate scheduled_for.
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS stories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -51,12 +55,25 @@ CREATE TABLE IF NOT EXISTS stories (
   quote TEXT,
   quote_attribution TEXT,
   source_notes TEXT NOT NULL DEFAULT '',
+  finding_id UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (issue_id, position)
 );
 
--- Safe for existing Railway databases created before source_notes existed.
 ALTER TABLE stories ADD COLUMN IF NOT EXISTS source_notes TEXT NOT NULL DEFAULT '';
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS finding_id UUID;
+
+-- Raw newer database findings / tips that Claude turns into drafts.
+CREATE TABLE IF NOT EXISTS findings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL,
+  source_url TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT '',
+  found_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  used_in_issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS sends (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,6 +101,10 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE INDEX IF NOT EXISTS idx_subscribers_active ON subscribers (status) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_issues_status_date ON issues (status, issue_date DESC);
+CREATE INDEX IF NOT EXISTS idx_issues_scheduled
+  ON issues (scheduled_for)
+  WHERE status = 'ready' AND scheduled_for IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_stories_issue_position ON stories (issue_id, position);
+CREATE INDEX IF NOT EXISTS idx_findings_unused ON findings (found_at DESC) WHERE used_in_issue_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_sends_issue ON sends (issue_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status, due_date NULLS LAST);
