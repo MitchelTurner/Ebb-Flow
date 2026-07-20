@@ -25,6 +25,7 @@ export function getConfig() {
     resendApiKey: optional("RESEND_API_KEY"),
     fromEmail: optional("FROM_EMAIL") ?? "The Ebb & Flow <onboarding@resend.dev>",
     appUrl: (optional("APP_URL") ?? "http://localhost:3000").replace(/\/$/, ""),
+    adminPassword: optional("ADMIN_PASSWORD"),
     issueId: optional("ISSUE_ID"),
     dryRun: bool("DRY_RUN", false),
     maxRecipients: process.env.MAX_RECIPIENTS

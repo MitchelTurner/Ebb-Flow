@@ -1,13 +1,14 @@
 # The Ebb & Flow — automated newsletter
 
-Pulls issue + subscriber data from **Railway Postgres**, fills `templates/ebb-and-flow.html`, and sends via **Resend**.
+Pulls issue + subscriber data from **Railway Postgres**, fills `templates/ebb-and-flow.html`, and sends via **Resend**. Includes a public subscribe page and password-protected admin for subscribers, email issues, and tasks.
 
 ## What you get
 
-- Parameterized HTML email template (from the original design mock)
-- Postgres schema: `subscribers`, `issues`, `stories`, `sends`
+- Parameterized HTML email template
+- Postgres schema: `subscribers`, `issues`, `stories`, `sends`, `tasks`
+- Public subscribe page (`/`)
+- Admin UI (`/admin`) — manage subscribers, draft/send emails, track tasks
 - CLI: migrate / seed / preview / send
-- HTTP service: health, browser preview, unsubscribe, cron trigger
 - Railway-ready `railway.toml` + Dockerfile
 
 ## Setup
@@ -18,7 +19,7 @@ Pulls issue + subscriber data from **Railway Postgres**, fills `templates/ebb-an
 
 ```bash
 cp .env.example .env
-# fill DATABASE_URL, RESEND_API_KEY, FROM_EMAIL, APP_URL
+# fill DATABASE_URL, RESEND_API_KEY, FROM_EMAIL, APP_URL, ADMIN_PASSWORD
 ```
 
 4. Install and migrate:
@@ -29,73 +30,80 @@ npm run db:migrate
 npm run db:seed
 ```
 
-5. Preview locally (no send):
-
-```bash
-npm run preview
-# open .preview/<issue-id>.html
-```
-
-6. Dry-run send (writes `sends` rows as `skipped`):
-
-```bash
-DRY_RUN=true npm run send
-```
-
-7. Real send:
-
-```bash
-npm run send
-# or a specific issue:
-npm run send -- --issue=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
-```
-
-## HTTP service
+5. Run the web app:
 
 ```bash
 npm run serve
+# open http://localhost:3000        → subscribe
+# open http://localhost:3000/admin  → manage
 ```
+
+6. Dry-run / real send:
+
+```bash
+DRY_RUN=true npm run send
+npm run send
+```
+
+Or send from **Admin → Emails → Send now**.
+
+## Frontend
+
+| URL | Purpose |
+|-----|---------|
+| `/` | Public subscribe form |
+| `/admin` | Login + dashboard (requires `ADMIN_PASSWORD`) |
+
+Admin tabs:
+
+- **Overview** — subscriber/issue/task counts
+- **Subscribers** — add, reactivate, unsubscribe, delete
+- **Emails** — create/edit issues + 6 stories, preview, dry-run/live send
+- **Tasks** — todo / doing / done board for editorial work
+
+## API (selected)
+
+| Method | Path | Auth |
+|--------|------|------|
+| `POST` | `/api/subscribe` | public |
+| `POST` | `/api/admin/login` | password |
+| `GET` | `/api/admin/subscribers` | admin cookie |
+| `GET/POST/PATCH` | `/api/admin/issues` | admin cookie |
+| `POST` | `/api/admin/issues/:id/send` | admin cookie |
+| `GET/POST/PATCH` | `/api/admin/tasks` | admin cookie |
+
+Also:
 
 | Route | Purpose |
 |--------|---------|
 | `GET /health` | Health check |
 | `GET /preview/:issueId` | Render issue in browser |
 | `GET/POST /unsubscribe/:token` | One-click unsubscribe |
-| `GET /preferences/:token` | Simple prefs page |
-| `POST /cron/send` | Trigger send (optional `Authorization: Bearer $CRON_SECRET`) |
+| `POST /cron/send` | Cron trigger (`CRON_SECRET` optional) |
 
 ## Railway deploy
 
-1. Create a Railway project and attach Postgres.
-2. Deploy this repo as a service; set env vars from `.env.example`.
-3. Run once (Railway shell or one-off):
+1. Deploy this repo; attach Postgres.
+2. Set env vars from `.env.example` (**include `ADMIN_PASSWORD`**).
+3. Run once in Railway shell:
 
 ```bash
 npm run db:migrate
 npm run db:seed
 ```
 
-4. Add a **Cron** service (or GitHub Action) that runs:
-
-```bash
-npm run start:send
-```
-
-Suggested schedule: `0 15 * * 1` (Mondays 15:00 UTC).
-
-Alternatively hit `POST /cron/send` with `CRON_SECRET` from an external scheduler.
+4. Open your public URL → subscribe + `/admin`.
+5. Optional cron service: `npm run start:send` on `0 15 * * 1`.
 
 ## Editorial workflow
 
-1. Insert/update a row in `issues` with `status = 'draft'`.
-2. Insert up to 6 rows in `stories` (`position` 1–6; position 1 is the lead/hero).
-3. When ready to mail, set `issues.status = 'ready'`.
-4. Cron/`npm run send` sends to all `subscribers` with `status = 'active'`, then marks the issue `sent`.
+1. In Admin → **Emails**, create a draft issue and add up to 6 stories.
+2. Track prep work in **Tasks**.
+3. Preview the issue, set status to **ready**, then **Send now** (or wait for cron).
+4. After send, status becomes `sent`.
 
 ## Template tags
 
 Merge tags use `{{key}}` or `{{key|fallback}}` (used for `{{first_name|neighbor}}`).
 
-Dynamic fields include issue metadata, weather/tides, intro, six stories, CTA, coming-up list, tip box, and per-subscriber unsubscribe/prefs URLs. See `templates/ebb-and-flow.html`.
-
-The original bundler preview file `The Ebb and Flow.html` is kept for design reference; production rendering uses `templates/ebb-and-flow.html`.
+See `templates/ebb-and-flow.html`. The original bundler file `The Ebb and Flow.html` remains for design reference.

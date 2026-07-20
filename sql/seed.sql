@@ -119,3 +119,29 @@ INSERT INTO stories (
   'First state berth for the town in over a decade.',
   'https://example.com/sports', NULL, NULL, NULL
 );
+
+INSERT INTO tasks (id, title, notes, status, due_date, issue_id)
+VALUES
+  (
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1',
+    'Confirm weather & tides',
+    'Pull morning readings before send.',
+    'todo',
+    '2026-07-19',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+  ),
+  (
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2',
+    'Proof lead story quote',
+    'Check attribution spelling.',
+    'doing',
+    '2026-07-19',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+  )
+ON CONFLICT (id) DO UPDATE SET
+  title = EXCLUDED.title,
+  notes = EXCLUDED.notes,
+  status = EXCLUDED.status,
+  due_date = EXCLUDED.due_date,
+  issue_id = EXCLUDED.issue_id,
+  updated_at = now();

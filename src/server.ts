@@ -1,4 +1,8 @@
 import express from "express";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createApiRouter } from "./api.js";
 import type { AppConfig } from "./config.js";
 import {
   getIssueForSend,
@@ -9,13 +13,23 @@ import {
 import { renderIssueEmail } from "./render.js";
 import { sendNewsletter } from "./send.js";
 
+const publicDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
+const indexHtml = join(publicDir, "index.html");
+const adminHtml = join(publicDir, "admin", "index.html");
+
 export function createServer(config: AppConfig) {
   const app = express();
   app.use(express.urlencoded({ extended: false }));
   app.use(express.json());
 
+  app.use("/api", createApiRouter(config));
+
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, service: "ebb-flow-newsletter" });
+    res.json({
+      ok: true,
+      service: "ebb-flow-newsletter",
+      publicDirExists: existsSync(publicDir),
+    });
   });
 
   app.get("/preview/:issueId", async (req, res) => {
@@ -122,7 +136,6 @@ export function createServer(config: AppConfig) {
     }
   });
 
-  // Manual / cron trigger. Protect with CRON_SECRET when set.
   app.post("/cron/send", async (req, res) => {
     const secret = process.env.CRON_SECRET?.trim();
     if (secret) {
@@ -142,14 +155,42 @@ export function createServer(config: AppConfig) {
     }
   });
 
+  app.use(express.static(publicDir, { index: "index.html" }));
+
+  app.get("/", (_req, res) => {
+    if (!existsSync(indexHtml)) {
+      res
+        .status(500)
+        .type("text")
+        .send(`Frontend missing. Expected ${indexHtml}`);
+      return;
+    }
+    res.sendFile(indexHtml);
+  });
+
+  app.get(["/admin", "/admin/"], (_req, res) => {
+    if (!existsSync(adminHtml)) {
+      res
+        .status(500)
+        .type("text")
+        .send(`Admin UI missing. Expected ${adminHtml}`);
+      return;
+    }
+    res.sendFile(adminHtml);
+  });
+
   return app;
 }
 
 export async function startServer(config: AppConfig): Promise<void> {
+  if (!existsSync(publicDir)) {
+    console.warn(`Warning: public directory not found at ${publicDir}`);
+  }
   const app = createServer(config);
   await new Promise<void>((resolve) => {
     app.listen(config.port, () => {
       console.log(`Listening on :${config.port}`);
+      console.log(`Serving frontend from ${publicDir}`);
       resolve();
     });
   });

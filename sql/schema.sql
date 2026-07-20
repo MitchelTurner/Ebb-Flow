@@ -66,7 +66,20 @@ CREATE TABLE IF NOT EXISTS sends (
   UNIQUE (issue_id, subscriber_id)
 );
 
+CREATE TABLE IF NOT EXISTS tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'todo'
+    CHECK (status IN ('todo', 'doing', 'done')),
+  due_date DATE,
+  issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_subscribers_active ON subscribers (status) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_issues_status_date ON issues (status, issue_date DESC);
 CREATE INDEX IF NOT EXISTS idx_stories_issue_position ON stories (issue_id, position);
 CREATE INDEX IF NOT EXISTS idx_sends_issue ON sends (issue_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status, due_date NULLS LAST);
