@@ -8,9 +8,10 @@ import {
   getStories,
   runSqlFile,
 } from "./db.js";
+import { autoDraftFromNewestFindings } from "./autoDraft.js";
 import { generateAndSaveIssue } from "./generate.js";
 import { renderIssueEmail } from "./render.js";
-import { sendNewsletter } from "./send.js";
+import { sendDueNewsletters, sendNewsletter } from "./send.js";
 import { startServer } from "./server.js";
 
 async function main(): Promise<void> {
@@ -39,9 +40,22 @@ async function main(): Promise<void> {
         if (args.includes("--dry-run")) {
           process.env.DRY_RUN = "true";
         }
-        const result = await sendNewsletter(getConfig());
+        const fresh = getConfig();
+        if (fresh.issueId) {
+          const result = await sendNewsletter(fresh);
+          console.log(JSON.stringify(result, null, 2));
+          if (result.failed > 0) process.exitCode = 1;
+        } else {
+          const results = await sendDueNewsletters(fresh);
+          console.log(JSON.stringify(results, null, 2));
+          if (results.some((r) => r.failed > 0)) process.exitCode = 1;
+        }
+        break;
+      }
+      case "auto-draft": {
+        const result = await autoDraftFromNewestFindings(getConfig());
         console.log(JSON.stringify(result, null, 2));
-        if (result.failed > 0) process.exitCode = 1;
+        if (!result.drafted) process.exitCode = 1;
         break;
       }
       case "preview": {
@@ -122,9 +136,10 @@ Commands:
   seed                 Apply sql/seed.sql
   preview [--issue=ID] Render latest/ready issue HTML to .preview/
   generate --issue=ID  Use Claude to rewrite issue + stories from source notes
+  auto-draft           Draft a review issue from newest unused findings
   send [--issue=ID] [--dry-run]
-                       Auto-fill template from Postgres and send via Resend
-  serve                HTTP server (preview, unsubscribe, /cron/send)
+                       Send due scheduled/ready issues via Resend
+  serve                HTTP server (preview, unsubscribe, cron routes)
 
 Environment: see .env.example
 `);

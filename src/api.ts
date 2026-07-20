@@ -7,18 +7,24 @@ import {
   setAdminCookie,
   verifyAdminPassword,
 } from "./auth.js";
+import { autoDraftFromNewestFindings } from "./autoDraft.js";
 import {
+  createFinding,
   createIssue,
   createTask,
+  deleteFinding,
   deleteIssue,
   deleteStory,
   deleteSubscriber,
   deleteTask,
   getDashboardStats,
   getStories,
+  listFindings,
   listIssues,
+  listReviewIssues,
   listSubscribers,
   listTasks,
+  scheduleIssue,
   subscribe,
   updateIssue,
   updateSubscriberStatus,
@@ -283,6 +289,7 @@ export function createApiRouter(config: AppConfig): Router {
           ? String(body.quote_attribution)
           : null,
         source_notes: sourceNotes,
+        finding_id: body.finding_id ? String(body.finding_id) : null,
       });
 
       let generated = null;
@@ -328,12 +335,108 @@ export function createApiRouter(config: AppConfig): Router {
   router.post("/admin/issues/:id/send", guard, async (req, res) => {
     try {
       const dryRun = Boolean(req.body?.dry_run);
+      // Immediate send: clear future schedule so due-check passes.
+      if (!dryRun) {
+        await updateIssue(config.databaseUrl, req.params.id, {
+          status: "ready",
+          scheduled_for: new Date().toISOString(),
+        });
+      }
       const result = await sendNewsletter({
         ...config,
         issueId: req.params.id,
         dryRun: dryRun || config.dryRun,
       });
       res.json({ ok: true, result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, error: message });
+    }
+  });
+
+  router.post("/admin/issues/:id/schedule", guard, async (req, res) => {
+    try {
+      const scheduledFor = String(req.body?.scheduled_for ?? "").trim();
+      if (!scheduledFor || Number.isNaN(Date.parse(scheduledFor))) {
+        badRequest(res, "scheduled_for must be a valid datetime.");
+        return;
+      }
+      const issue = await scheduleIssue(
+        config.databaseUrl,
+        req.params.id,
+        scheduledFor
+      );
+      if (!issue) {
+        res.status(404).json({ error: "Issue not found or not schedulable" });
+        return;
+      }
+      res.json({ issue });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.get("/admin/review", guard, async (_req, res) => {
+    try {
+      const issues = await listReviewIssues(config.databaseUrl);
+      res.json({ issues });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.get("/admin/findings", guard, async (req, res) => {
+    try {
+      const unusedOnly = String(req.query.unused ?? "") === "1";
+      const findings = await listFindings(config.databaseUrl, { unusedOnly });
+      res.json({ findings });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/admin/findings", guard, async (req, res) => {
+    try {
+      const body = String(req.body?.body ?? "").trim();
+      if (!body) {
+        badRequest(res, "body is required.");
+        return;
+      }
+      const finding = await createFinding(config.databaseUrl, {
+        title: String(req.body?.title ?? ""),
+        body,
+        source_url: String(req.body?.source_url ?? ""),
+        category: String(req.body?.category ?? ""),
+        found_at: req.body?.found_at || undefined,
+      });
+      res.status(201).json({ finding });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.delete("/admin/findings/:id", guard, async (req, res) => {
+    try {
+      const ok = await deleteFinding(config.databaseUrl, req.params.id);
+      if (!ok) {
+        res.status(404).json({ error: "Finding not found or already used" });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/admin/auto-draft", guard, async (_req, res) => {
+    try {
+      const draft = await autoDraftFromNewestFindings(config);
+      res.json({ ok: true, draft });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ ok: false, error: message });

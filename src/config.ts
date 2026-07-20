@@ -31,6 +31,11 @@ export function getConfig() {
     anthropicModel: "claude-fable-5" as const,
     /** When true, saving a story with source_notes triggers Claude rewrite of that issue. */
     anthropicAutoWrite: bool("ANTHROPIC_AUTO_WRITE", false),
+    /** On web boot / cron, draft a new issue from newest unused findings. */
+    autoDraftFromFindings: bool("AUTO_DRAFT_FROM_FINDINGS", true),
+    findingsBatchSize: process.env.FINDINGS_BATCH_SIZE
+      ? Number.parseInt(process.env.FINDINGS_BATCH_SIZE, 10)
+      : 6,
     issueId: optional("ISSUE_ID"),
     dryRun: bool("DRY_RUN", false),
     maxRecipients: process.env.MAX_RECIPIENTS

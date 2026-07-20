@@ -13,6 +13,7 @@
     "send": "tsx src/cli.ts send",
     "preview": "tsx src/cli.ts preview",
     "generate": "tsx src/cli.ts generate",
+    "auto-draft": "tsx src/cli.ts auto-draft",
     "serve": "tsx src/cli.ts serve",
     "db:migrate": "tsx src/cli.ts migrate",
     "db:seed": "tsx src/cli.ts seed",

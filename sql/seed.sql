@@ -145,3 +145,37 @@ ON CONFLICT (id) DO UPDATE SET
   due_date = EXCLUDED.due_date,
   issue_id = EXCLUDED.issue_id,
   updated_at = now();
+
+-- Unused findings for Claude auto-draft demos (newer entries win).
+INSERT INTO findings (id, title, body, source_url, category, found_at)
+VALUES
+  (
+    'cccccccc-cccc-cccc-cccc-ccccccccccc1',
+    'Harbor fuel dock delay',
+    'Harbor master says the fuel dock repair slips another week. Commercial boats are topping off in Ward Cove instead. Quote pending from Harbor Master Eli Stone.',
+    'https://example.com/harbor',
+    'Waterfront',
+    now() - interval '2 hours'
+  ),
+  (
+    'cccccccc-cccc-cccc-cccc-ccccccccccc2',
+    'Library late fees pause',
+    'City library board voted to pause late fees through September. Staff say returns are already up. Board chair called it a summer reset for families.',
+    'https://example.com/library',
+    'Community',
+    now() - interval '1 hour'
+  ),
+  (
+    'cccccccc-cccc-cccc-cccc-ccccccccccc3',
+    'Cruise gangway schedule',
+    'Two ships Thursday, one Friday. Downtown shuttle loop extends to 8 p.m. on ship days only.',
+    'https://example.com/cruise',
+    'Tourism',
+    now() - interval '30 minutes'
+  )
+ON CONFLICT (id) DO UPDATE SET
+  title = EXCLUDED.title,
+  body = EXCLUDED.body,
+  source_url = EXCLUDED.source_url,
+  category = EXCLUDED.category,
+  found_at = EXCLUDED.found_at;
