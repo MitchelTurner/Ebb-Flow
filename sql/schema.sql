@@ -87,6 +87,11 @@ CREATE TABLE IF NOT EXISTS transcripts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Existing transcripts tables may predate these columns.
+ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS used_in_issue_id UUID REFERENCES issues(id) ON DELETE SET NULL;
+ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
 -- Tracks which external/source rows have already been drafted into an issue
 -- (used for discovered transcript tables that lack used_in_issue_id).
 CREATE TABLE IF NOT EXISTS source_usage (
