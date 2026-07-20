@@ -62,7 +62,10 @@ export function createApiRouter(config: AppConfig): Router {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: message });
+      const hint = /relation .* does not exist/i.test(message)
+        ? " Database tables are missing — redeploy or run npm run db:migrate."
+        : "";
+      res.status(500).json({ error: `${message}${hint}` });
     }
   });
 
