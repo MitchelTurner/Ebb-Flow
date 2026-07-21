@@ -16,12 +16,19 @@ form?.addEventListener("submit", async (event) => {
   if (button instanceof HTMLButtonElement) button.disabled = true;
 
   try {
-    const res = await fetch("/api/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, first_name }),
-    });
-    const payload = await res.json();
+    let res;
+    try {
+      res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, first_name }),
+      });
+    } catch {
+      throw new Error(
+        "Could not reach the server. Wait for Railway to finish deploying, then try again."
+      );
+    }
+    const payload = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(payload.error || "Could not subscribe.");
 
     message.className = "message ok";
