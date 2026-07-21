@@ -1,7 +1,5 @@
 import { PDFParse } from "pdf-parse";
 
-const MAX_CHARS = 80_000;
-
 export class ExtractTextError extends Error {
   constructor(message: string) {
     super(message);
@@ -22,10 +20,8 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-function truncate(text: string): string {
-  const trimmed = text.replace(/\u0000/g, "").trim();
-  if (trimmed.length <= MAX_CHARS) return trimmed;
-  return `${trimmed.slice(0, MAX_CHARS)}\n\n[…truncated for AI context limit…]`;
+function cleanText(text: string): string {
+  return text.replace(/\u0000/g, "").trim();
 }
 
 /** Extract plain text from common document uploads. */
@@ -53,7 +49,7 @@ export async function extractTextFromUpload(params: {
   if (isPdf) {
     const parser = new PDFParse({ data: params.buffer });
     const result = await parser.getText();
-    const text = truncate(String(result.text ?? ""));
+    const text = cleanText(String(result.text ?? ""));
     if (!text) {
       throw new ExtractTextError(
         "Could not extract text from that PDF (it may be image-only)."
@@ -63,13 +59,13 @@ export async function extractTextFromUpload(params: {
   }
 
   if (isHtml) {
-    const text = truncate(stripHtml(params.buffer.toString("utf8")));
+    const text = cleanText(stripHtml(params.buffer.toString("utf8")));
     if (!text) throw new ExtractTextError("HTML file had no readable text.");
     return text;
   }
 
   if (isText || isJson) {
-    const text = truncate(params.buffer.toString("utf8"));
+    const text = cleanText(params.buffer.toString("utf8"));
     if (!text) throw new ExtractTextError("File was empty.");
     return text;
   }

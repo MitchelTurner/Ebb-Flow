@@ -40,7 +40,7 @@ import { sendSubscribeThankYou } from "./welcome.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  limits: { files: 1 },
 });
 import {
   createTranscript,
