@@ -435,14 +435,23 @@ button[type="submit"]:disabled {
   color: rgba(238, 243, 246, 0.42);
 }
 .note a,
-.band a,
+.band a:not(.btn-gold),
 .site-foot a {
   color: rgba(196, 161, 95, 0.95);
   text-decoration: none;
 }
 .note a:hover,
-.band a:hover,
+.band a:not(.btn-gold):hover,
 .site-foot a:hover { text-decoration: underline; }
+
+/* Keep solid gold CTAs readable (dark ink on gold — not gold-on-gold). */
+a.btn-gold,
+a.btn-gold:hover,
+.band a.btn-gold,
+.band a.btn-gold:hover {
+  color: #101820;
+  text-decoration: none;
+}
 
 .hp {
   position: absolute;
