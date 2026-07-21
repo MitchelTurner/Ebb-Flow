@@ -26,7 +26,8 @@
     "smoke:cron": "tsx src/weeklyCron.smoke.ts",
     "smoke:welcome": "tsx src/welcome.smoke.ts",
     "smoke:webhooks": "tsx src/webhooks.smoke.ts",
-    "smoke:extract": "tsx src/extractText.smoke.ts"
+    "smoke:extract": "tsx src/extractText.smoke.ts",
+    "smoke:analytics": "tsx src/analytics.smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",

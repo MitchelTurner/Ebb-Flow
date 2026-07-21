@@ -8,6 +8,12 @@ import {
   setAdminCookie,
   verifyAdminPassword,
 } from "./auth.js";
+import {
+  getAnalyticsFunnel,
+  getPublicLandingStats,
+  isAllowedAnalyticsEvent,
+  recordAnalyticsEvent,
+} from "./analytics.js";
 import { autoDraftFromNewestSources } from "./autoDraft.js";
 import {
   createContextFile,
@@ -97,6 +103,72 @@ export function createApiRouter(config: AppConfig): Router {
     });
   });
 
+  /** Public landing bootstrap: social proof + analytics config (no secrets). */
+  router.get("/public/landing", async (_req, res) => {
+    try {
+      const stats = await getPublicLandingStats(config.databaseUrl);
+      res.json({
+        proof_label: stats.proof_label,
+        sent_issues: stats.sent_issues,
+        analytics_enabled: config.analyticsEnabled,
+        plausible_domain: config.plausibleDomain ?? null,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** First-party funnel events from the landing page. */
+  router.post("/events", async (req, res) => {
+    try {
+      if (!config.analyticsEnabled) {
+        res.status(204).end();
+        return;
+      }
+      const ip =
+        (req.headers["x-forwarded-for"] as string | undefined)
+          ?.split(",")[0]
+          ?.trim() ||
+        req.ip ||
+        "unknown";
+      const limited = rateLimit({
+        key: `events:${ip}`,
+        limit: 120,
+        windowMs: 60 * 60 * 1000,
+      });
+      if (!limited.ok) {
+        res.status(429).json({ error: "Too many events." });
+        return;
+      }
+
+      const name = String(req.body?.name ?? "").trim();
+      if (!isAllowedAnalyticsEvent(name)) {
+        badRequest(res, "Unknown event.");
+        return;
+      }
+
+      const meta =
+        req.body?.meta && typeof req.body.meta === "object"
+          ? (req.body.meta as Record<string, unknown>)
+          : {};
+
+      await recordAnalyticsEvent(config.databaseUrl, {
+        name,
+        path: String(req.body?.path ?? "/"),
+        referrer: String(req.body?.referrer ?? ""),
+        utm_source: String(req.body?.utm_source ?? ""),
+        utm_medium: String(req.body?.utm_medium ?? ""),
+        utm_campaign: String(req.body?.utm_campaign ?? ""),
+        meta,
+      });
+      res.status(204).end();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
   router.post("/subscribe", async (req, res) => {
     try {
       // Honeypot — bots fill hidden fields; humans leave blank.
@@ -133,6 +205,28 @@ export function createApiRouter(config: AppConfig): Router {
       }
       const subscriber = await subscribe(config.databaseUrl, email, firstName);
       const welcome = await sendSubscribeThankYou(config, subscriber);
+
+      if (config.analyticsEnabled) {
+        try {
+          await recordAnalyticsEvent(config.databaseUrl, {
+            name: "subscribe_success",
+            path: "/",
+            referrer: String(req.body?.referrer ?? ""),
+            utm_source: String(req.body?.utm_source ?? ""),
+            utm_medium: String(req.body?.utm_medium ?? ""),
+            utm_campaign: String(req.body?.utm_campaign ?? ""),
+            meta: {
+              has_name: Boolean(firstName),
+              welcome_sent: Boolean(
+                welcome && "sent" in welcome && welcome.sent
+              ),
+            },
+          });
+        } catch {
+          /* never fail subscribe on analytics */
+        }
+      }
+
       res.status(201).json({
         ok: true,
         subscriber: {
@@ -233,8 +327,12 @@ export function createApiRouter(config: AppConfig): Router {
   router.get("/admin/ops", guard, async (_req, res) => {
     try {
       const ops = await getSendOpsSnapshot(config.databaseUrl);
+      const funnel = config.analyticsEnabled
+        ? await getAnalyticsFunnel(config.databaseUrl, 7)
+        : null;
       res.json({
         ops,
+        funnel,
         health: {
           reply_to_configured: Boolean(config.replyToEmail),
           resend_configured: Boolean(config.resendApiKey),
@@ -242,6 +340,8 @@ export function createApiRouter(config: AppConfig): Router {
           weekly_cron_in_process: config.weeklyCronEnabled,
           cron_secret_configured: Boolean(config.cronSecret),
           dry_run: config.dryRun,
+          analytics_enabled: config.analyticsEnabled,
+          plausible_domain: config.plausibleDomain ?? null,
         },
       });
     } catch (err) {

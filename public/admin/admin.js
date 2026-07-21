@@ -215,7 +215,7 @@ async function loadOps() {
   const panel = document.getElementById("ops-panel");
   if (!panel) return;
   try {
-    const { ops, health } = await api("/api/admin/ops");
+    const { ops, health, funnel } = await api("/api/admin/ops");
     const pill = (ok, label) =>
       `<span class="ops-pill ${ok ? "ok" : "warn"}">${ok ? "✓" : "!"} ${escapeHtml(label)}</span>`;
     const failures = (ops.recent_failures || [])
@@ -224,6 +224,14 @@ async function loadOps() {
           `<li><strong>${escapeHtml(row.email)}</strong> · ${escapeHtml(row.subject)}<br><span class="muted">${escapeHtml(row.error || "failed")}</span></li>`
       )
       .join("");
+    const funnelHtml = funnel
+      ? `<p class="muted" style="margin-top:0.85rem">Landing funnel (7d):
+          views ${funnel.page_view ?? 0} ·
+          form ${funnel.form_start ?? 0} ·
+          submit ${funnel.subscribe_submit ?? 0} ·
+          success ${funnel.subscribe_success ?? 0}
+        </p>`
+      : "";
     panel.innerHTML = `
       <p><strong>${ops.sent_7d}</strong> sent · <strong>${ops.failed_sends_7d}</strong> failed · <strong>${ops.bounced_subscribers}</strong> bounced · <strong>${ops.ready_due}</strong> due now</p>
       <div class="ops-health">
@@ -238,7 +246,9 @@ async function loadOps() {
             ? "In-process Monday cron"
             : "In-process Monday cron off"
         )}
+        ${pill(health.analytics_enabled !== false, "Landing analytics")}
       </div>
+      ${funnelHtml}
       ${
         failures
           ? `<p class="muted">Recent failures</p><ul class="fail-list">${failures}</ul>`

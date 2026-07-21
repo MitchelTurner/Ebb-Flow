@@ -151,6 +151,24 @@ CREATE TABLE IF NOT EXISTS context_files (
 CREATE INDEX IF NOT EXISTS idx_context_files_issue
   ON context_files (issue_id, created_at DESC);
 
+-- First-party landing / subscribe funnel events (privacy-light).
+CREATE TABLE IF NOT EXISTS analytics_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  path TEXT NOT NULL DEFAULT '/',
+  referrer TEXT NOT NULL DEFAULT '',
+  utm_source TEXT NOT NULL DEFAULT '',
+  utm_medium TEXT NOT NULL DEFAULT '',
+  utm_campaign TEXT NOT NULL DEFAULT '',
+  meta JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_events_name_created
+  ON analytics_events (name, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_created
+  ON analytics_events (created_at DESC);
+
 -- Legacy tables from earlier app versions (safe no-ops if already gone).
 DROP TABLE IF EXISTS tasks;
 DROP TABLE IF EXISTS findings;

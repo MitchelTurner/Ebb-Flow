@@ -3,8 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>The Ebb &amp; Flow</title>
-  <meta name="description" content="Local news from the Tongass Narrows — subscribe to the weekly roundup.">
+  <title>The Ebb &amp; Flow — Monday local news from Ketchikan</title>
+  <meta name="description" content="Free weekly local news from the Tongass Narrows. Town hall, harbor, tides, and what’s opening on Main — one Monday email, cancel anytime.">
+  <meta property="og:title" content="The Ebb &amp; Flow">
+  <meta property="og:description" content="Monday local news from Ketchikan / Tongass Narrows. Free. Cancel anytime.">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#0c1824">
   <link rel="icon" type="image/png" href="/brand/logo.png">
   <link rel="apple-touch-icon" href="/brand/logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,64 +19,135 @@
 <body>
   <div class="stage" aria-hidden="true">
     <div class="grid-veil"></div>
+    <div class="tide"></div>
     <div class="orb orb-a"></div>
     <div class="orb orb-b"></div>
     <div class="scan"></div>
   </div>
 
-  <main class="hero">
-    <header class="topline">
-      <span class="signal"></span>
-      <span>Ketchikan · AK</span>
-      <span class="sep">/</span>
-      <span>Weekly</span>
-    </header>
+  <main>
+    <!-- Hero: brand + one line + one CTA (opt-in) -->
+    <section class="hero" id="top">
+      <header class="topline">
+        <span class="signal" aria-hidden="true"></span>
+        <span>Ketchikan · AK</span>
+        <span class="sep">/</span>
+        <span>Mondays</span>
+        <span class="sep">/</span>
+        <span>Free</span>
+      </header>
 
-    <div class="hero-copy">
-      <img
-        class="brand-mark brand-mark-light"
-        src="/brand/logo.png"
-        width="160"
-        height="160"
-        alt="The Ebb &amp; Flow"
-        decoding="async"
-        fetchpriority="high"
-      >
-      <p class="eyebrow">Local news from the Tongass Narrows</p>
-      <h1 class="brand">
-        <span>The Ebb</span>
-        <span class="amp">&amp; Flow</span>
-      </h1>
-      <p class="lede">Six stories worth your time — tides, town hall, and what’s opening on Main.</p>
-    </div>
+      <div class="hero-copy">
+        <img
+          class="brand-mark brand-mark-light"
+          src="/brand/logo.png"
+          width="160"
+          height="160"
+          alt="The Ebb &amp; Flow"
+          decoding="async"
+          fetchpriority="high"
+        >
+        <h1 class="brand">
+          <span>The Ebb</span>
+          <span class="amp">&amp; Flow</span>
+        </h1>
+        <p class="lede">The Monday brief for the Tongass Narrows — town hall, harbor, and what’s opening on Main.</p>
+      </div>
 
-    <form class="subscribe" id="subscribe-form" novalidate>
-      <div class="fields">
-        <label>
-          <span>First name</span>
-          <input type="text" name="first_name" autocomplete="given-name" placeholder="Neighbor">
-        </label>
-        <label class="wide">
-          <span>Email</span>
-          <input type="email" name="email" autocomplete="email" required placeholder="you@example.com">
-        </label>
-        <!-- Honeypot: leave empty -->
-        <label class="hp" aria-hidden="true">
-          <span>Company website</span>
-          <input type="text" name="company_website" tabindex="-1" autocomplete="off">
-        </label>
-        <button type="submit">
-          <span>Subscribe</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
-        </button>
+      <div class="cta-block" id="subscribe-cta" data-track-view="cta_view">
+        <form class="subscribe" id="subscribe-form" novalidate>
+          <p class="offer">One thoughtful email a week. No daily drip.</p>
+          <div class="fields">
+            <label class="wide">
+              <span>Email</span>
+              <input
+                type="email"
+                name="email"
+                id="email-input"
+                autocomplete="email"
+                inputmode="email"
+                required
+                placeholder="you@example.com"
+              >
+            </label>
+            <label>
+              <span>First name <em>(optional)</em></span>
+              <input
+                type="text"
+                name="first_name"
+                autocomplete="given-name"
+                placeholder="Neighbor"
+              >
+            </label>
+            <!-- Attribution / UTM (filled by JS) -->
+            <input type="hidden" name="utm_source" id="utm_source" value="">
+            <input type="hidden" name="utm_medium" id="utm_medium" value="">
+            <input type="hidden" name="utm_campaign" id="utm_campaign" value="">
+            <input type="hidden" name="referrer" id="referrer" value="">
+            <!-- Honeypot: leave empty -->
+            <label class="hp" aria-hidden="true">
+              <span>Company website</span>
+              <input type="text" name="company_website" tabindex="-1" autocomplete="off">
+            </label>
+            <button type="submit" id="subscribe-submit">
+              <span>Get Mondays free</span>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+            </button>
+          </div>
+          <div class="meta-row">
+            <p class="note">Free forever · Unsubscribe in one click · <a class="archive-link" href="/archive" data-track="archive_click">Browse past issues</a></p>
+            <p class="message" id="subscribe-message" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+
+        <div class="success-panel hidden" id="success-panel" hidden>
+          <h2>You’re on the list</h2>
+          <p>Check your inbox for a short confirmation. The next issue lands Monday morning.</p>
+          <div class="success-actions">
+            <a class="btn-gold" href="/archive" data-track="archive_click">Read past issues</a>
+            <button type="button" class="btn-ghost" id="success-reset">Add another email</button>
+          </div>
+        </div>
       </div>
-      <div class="meta-row">
-        <p class="note">Free. Cancel anytime. <a class="archive-link" href="/archive">Past issues</a></p>
-        <p class="message" id="subscribe-message" role="status" aria-live="polite"></p>
-      </div>
-    </form>
+    </section>
+
+    <!-- Below fold: what you get -->
+    <section class="band" id="what-you-get">
+      <p class="band-eyebrow">What arrives</p>
+      <h2 class="band-title">A calm Monday roundup — not a firehose</h2>
+      <p class="band-lede">Usually a handful of local stories, tides, and what’s coming next week. Written for people who live here.</p>
+      <ul class="promise-list">
+        <li>Town hall &amp; harbor decisions that actually affect the week</li>
+        <li>Weather &amp; tides for planning around the Narrows</li>
+        <li>Openings, meetings, and a clear “coming up”</li>
+      </ul>
+    </section>
+
+    <!-- Below fold: social proof + sample -->
+    <section class="band band-alt" id="neighbors">
+      <p class="band-eyebrow">For Ketchikan readers</p>
+      <h2 class="band-title" id="proof-label">Join neighbors reading Mondays</h2>
+      <p class="band-lede">See a past issue before you commit — no login required.</p>
+      <p class="band-cta">
+        <a class="btn-gold" href="/archive" data-track="sample_click">Open the archive</a>
+      </p>
+    </section>
+
+    <!-- Below fold: trust -->
+    <section class="band" id="trust">
+      <p class="band-eyebrow">No spam theater</p>
+      <h2 class="band-title">Your inbox stays yours</h2>
+      <p class="band-lede">We don’t sell addresses. One email a week. Leave anytime from the footer of any issue.</p>
+    </section>
+
+    <footer class="site-foot">
+      <img class="foot-mark" src="/brand/logo.png" width="48" height="48" alt="" decoding="async">
+      <p>The Ebb &amp; Flow · Ketchikan / Tongass Narrows</p>
+      <p><a href="/archive">Archive</a> · <a href="#top">Back to subscribe</a></p>
+    </footer>
   </main>
 
+  <script src="/analytics.js" type="module"></script>
   <script src="/subscribe.js" type="module"></script>
 </body>
 </html>

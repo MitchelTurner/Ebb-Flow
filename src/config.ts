@@ -125,6 +125,13 @@ export function getConfig() {
       "REQUIRE_CRON_SECRET_IN_PRODUCTION",
       true
     ),
+    /** Persist first-party landing/subscribe events (default true). */
+    analyticsEnabled: bool("ANALYTICS_ENABLED", true),
+    /**
+     * Optional Plausible site domain (e.g. ebbflow.example).
+     * When set, the landing page loads Plausible’s privacy-friendly script.
+     */
+    plausibleDomain: optional("PLAUSIBLE_DOMAIN"),
   };
 }
 
