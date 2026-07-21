@@ -6,6 +6,7 @@ import {
   updateIssue,
   upsertStory,
 } from "./db.js";
+import { fetchMarineConditions } from "./marine.js";
 import type { Issue, Story } from "./types.js";
 
 export interface GenerateResult {
@@ -52,11 +53,14 @@ export async function generateAndSaveIssue(
     stories,
   });
 
+  const marinePatch = await maybeAutofillMarine(config, issue);
+
   const updatedIssue = await updateIssue(config.databaseUrl, issueId, {
     subject: generated.subject,
     preheader: generated.preheader,
     intro: generated.intro,
     coming_up: generated.coming_up,
+    ...marinePatch,
   });
   if (!updatedIssue) {
     throw new Error("Failed to save generated issue copy");
@@ -89,4 +93,71 @@ export async function generateAndSaveIssue(
     stories: savedStories.sort((a, b) => a.position - b.position),
     model: CLAUDE_MODEL,
   };
+}
+
+/** Fill weather/tides when blank (or always when force=true). */
+export async function applyMarineAutofill(
+  config: AppConfig,
+  issueId: string,
+  options?: { force?: boolean }
+): Promise<Issue> {
+  const issue = await getIssueForSend(config.databaseUrl, issueId);
+  if (!issue) {
+    throw new Error(`Issue not found: ${issueId}`);
+  }
+
+  const force = options?.force ?? false;
+  const needsFill =
+    force ||
+    !issue.weather?.trim() ||
+    !issue.high_tides?.trim() ||
+    !issue.low_tides?.trim() ||
+    !issue.high_tide_label?.trim();
+
+  if (!needsFill) return issue;
+
+  const marine = await fetchMarineConditions(config, issue.issue_date);
+  const updated = await updateIssue(config.databaseUrl, issueId, {
+    weather: force || !issue.weather?.trim() ? marine.weather : issue.weather,
+    high_tides:
+      force || !issue.high_tides?.trim() ? marine.high_tides : issue.high_tides,
+    low_tides:
+      force || !issue.low_tides?.trim() ? marine.low_tides : issue.low_tides,
+    high_tide_label:
+      force || !issue.high_tide_label?.trim()
+        ? marine.high_tide_label
+        : issue.high_tide_label,
+  });
+  if (!updated) {
+    throw new Error("Failed to save marine conditions");
+  }
+  return updated;
+}
+
+async function maybeAutofillMarine(
+  config: AppConfig,
+  issue: Issue
+): Promise<Partial<Issue>> {
+  const blank =
+    !issue.weather?.trim() ||
+    !issue.high_tides?.trim() ||
+    !issue.low_tides?.trim() ||
+    !issue.high_tide_label?.trim();
+  if (!blank) return {};
+
+  try {
+    const marine = await fetchMarineConditions(config, issue.issue_date);
+    return {
+      weather: issue.weather?.trim() ? issue.weather : marine.weather,
+      high_tides: issue.high_tides?.trim() ? issue.high_tides : marine.high_tides,
+      low_tides: issue.low_tides?.trim() ? issue.low_tides : marine.low_tides,
+      high_tide_label: issue.high_tide_label?.trim()
+        ? issue.high_tide_label
+        : marine.high_tide_label,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`Marine autofill skipped: ${message}`);
+    return {};
+  }
 }

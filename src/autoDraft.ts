@@ -1,25 +1,26 @@
 import type { AppConfig } from "./config.js";
-import { createIssue, upsertStory } from "./db.js";
-import { generateAndSaveIssue, type GenerateResult } from "./generate.js";
+import { CLAUDE_MODEL, generateIssueFromSources } from "./claude.js";
+import { createIssue, updateIssue, upsertStory } from "./db.js";
+import type { GenerateResult } from "./generate.js";
+import { fetchMarineConditions } from "./marine.js";
 import {
   getNewestDraftSources,
   markDraftSourcesUsed,
-  sourceToNotes,
-  type DraftSource,
 } from "./sources.js";
 
 export interface AutoDraftResult {
   drafted: boolean;
   reason?: string;
   findingCount: number;
+  topicCount?: number;
   sourceKind?: string;
   sourceTable?: string;
   result?: GenerateResult;
 }
 
 /**
- * Analyze the newest unused transcripts (or findings fallback) from Postgres,
- * create a draft issue, and ask Claude Fable 5 to fill the email template.
+ * Analyze newest unused transcripts, refine them into digestible topics,
+ * autofill Ketchikan weather/tides, and draft a review issue.
  */
 export async function autoDraftFromNewestFindings(
   config: AppConfig,
@@ -34,8 +35,10 @@ export async function autoDraftFromNewestFindings(
     };
   }
 
-  const limit = options?.limit ?? config.findingsBatchSize;
-  const sources = await getNewestDraftSources(config.databaseUrl, limit);
+  const maxTopics = options?.limit ?? config.findingsBatchSize;
+  // Load extra sources so Claude can cluster/split into topics.
+  const sourceLimit = Math.max(maxTopics, 12);
+  const sources = await getNewestDraftSources(config.databaseUrl, sourceLimit);
   if (sources.length === 0) {
     return {
       drafted: false,
@@ -46,53 +49,84 @@ export async function autoDraftFromNewestFindings(
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  let marine = {
+    weather: "",
+    high_tides: "",
+    low_tides: "",
+    high_tide_label: "",
+  };
+  try {
+    marine = await fetchMarineConditions(config, today);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`Marine autofill failed (continuing draft): ${message}`);
+  }
+
   const issue = await createIssue(config.databaseUrl, {
     issue_date: today,
     subject: `The Ebb & Flow — draft ${today}`,
     status: "draft",
     intro: "",
     preheader: "",
+    weather: marine.weather,
+    high_tides: marine.high_tides,
+    low_tides: marine.low_tides,
+    high_tide_label: marine.high_tide_label,
   });
 
-  const batch = sources.slice(0, 6);
-  let position = 1;
-  for (const source of batch) {
-    await upsertStory(config.databaseUrl, issue.id, {
-      position,
-      toc_title: stubTitle(source, position),
-      title: stubTitle(source, position),
-      eyebrow: source.category || "Transcript",
-      summary: "",
-      why_it_matters: "",
-      url: source.url || "",
-      image_url: null,
-      quote: null,
-      quote_attribution: null,
-      source_notes: sourceToNotes(source),
-      finding_id: source.kind === "finding" ? source.id : null,
-    });
-    position += 1;
-  }
-
   try {
-    const result = await generateAndSaveIssue(config, issue.id);
-    await markDraftSourcesUsed(config.databaseUrl, batch, issue.id);
+    const generated = await generateIssueFromSources({
+      apiKey: config.anthropicApiKey,
+      issue,
+      sources,
+      maxTopics,
+    });
+
+    const updatedIssue = await updateIssue(config.databaseUrl, issue.id, {
+      subject: generated.subject,
+      preheader: generated.preheader,
+      intro: generated.intro,
+      coming_up: generated.coming_up,
+    });
+    if (!updatedIssue) {
+      throw new Error("Failed to save generated issue copy");
+    }
+
+    const savedStories = [] as Awaited<ReturnType<typeof upsertStory>>[];
+    for (const story of generated.stories) {
+      const saved = await upsertStory(config.databaseUrl, issue.id, {
+        position: story.position,
+        toc_title: story.toc_title || story.title.slice(0, 48),
+        title: story.title,
+        eyebrow: story.eyebrow || "Local",
+        summary: story.summary,
+        why_it_matters: story.why_it_matters,
+        url: "",
+        image_url: null,
+        quote: story.quote,
+        quote_attribution: story.quote_attribution,
+        source_notes: story.source_notes || "",
+        finding_id: null,
+      });
+      savedStories.push(saved);
+    }
+
+    await markDraftSourcesUsed(config.databaseUrl, sources, issue.id);
+
     return {
       drafted: true,
-      findingCount: batch.length,
-      sourceKind: batch[0]?.kind,
-      sourceTable: batch[0]?.sourceTable,
-      result,
+      findingCount: sources.length,
+      topicCount: savedStories.length,
+      sourceKind: sources[0]?.kind,
+      sourceTable: sources[0]?.sourceTable,
+      result: {
+        issue: updatedIssue,
+        stories: savedStories.sort((a, b) => a.position - b.position),
+        model: CLAUDE_MODEL,
+      },
     };
   } catch (err) {
     // Leave sources unused so a later retry can pick them up.
     throw err;
   }
-}
-
-function stubTitle(source: DraftSource, position: number): string {
-  const title = source.title.trim();
-  if (title) return title.slice(0, 80);
-  const firstLine = source.content.trim().split(/\n/)[0] ?? "";
-  return firstLine.slice(0, 80) || `Transcript ${position}`;
 }

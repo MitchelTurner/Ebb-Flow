@@ -50,7 +50,7 @@
 
     <section id="panel-overview" class="panel" data-panel="overview">
       <div class="stats" id="stats"></div>
-      <p class="muted">Claude Fable 5 analyzes the newest unused <strong>transcripts</strong> from the database (findings are a fallback) and drafts a review email. Approve and schedule delivery in Review.</p>
+      <p class="muted">Claude Fable 5 refines unused <strong>transcripts</strong> into digestible topics, autofills Ketchikan weather &amp; tides, and drafts a review email.</p>
       <div class="toolbar" style="margin-top:1rem">
         <button type="button" id="overview-auto-draft-btn">Draft from newest transcripts</button>
       </div>
@@ -186,9 +186,9 @@
           <label class="cols-span">Preheader <input name="preheader"></label>
           <label style="grid-column:1/-1">Intro <textarea name="intro"></textarea></label>
           <label>Weather <input name="weather" placeholder="54°F · Light Rain"></label>
-          <label>High tides <input name="high_tides"></label>
-          <label>Low tides <input name="low_tides"></label>
-          <label>High tide label <input name="high_tide_label"></label>
+          <label>High tides <input name="high_tides" placeholder="6:12a · 5:48p"></label>
+          <label>Low tides <input name="low_tides" placeholder="12:03p · 11:41p"></label>
+          <label>High tide label <input name="high_tide_label" placeholder="High tide 6:12 a.m."></label>
           <label>CTA URL <input name="cta_url"></label>
           <label>CTA label <input name="cta_label"></label>
           <label style="grid-column:1/-1">Coming up (one per line) <textarea name="coming_up"></textarea></label>
@@ -201,6 +201,7 @@
           <div style="grid-column:1/-1; display:flex; gap:0.5rem; flex-wrap:wrap">
             <button type="submit">Save issue</button>
             <button type="button" class="secondary" id="generate-claude-btn">Rewrite with Claude</button>
+            <button type="button" class="secondary" id="autofill-marine-btn">Autofill weather &amp; tides</button>
             <button type="button" class="secondary" id="send-dry-btn">Dry-run send</button>
             <button type="button" id="send-live-btn">Send now</button>
           </div>
@@ -209,7 +210,7 @@
         <div class="section-head" style="margin-top:1.5rem">
           <h2>Stories</h2>
         </div>
-        <p class="muted">Paste raw updates into <strong>Source notes</strong>, save stories, then click <strong>Write with Claude</strong> to draft subject, intro, and polished copy.</p>
+        <p class="muted">Auto-draft refines transcripts into digestible topics. Or paste notes here and click <strong>Rewrite with Claude</strong>. Use <strong>Autofill weather &amp; tides</strong> for the marine strip.</p>
         <form id="story-form" class="grid-form cols-2">
           <input type="hidden" name="id">
           <label>Position

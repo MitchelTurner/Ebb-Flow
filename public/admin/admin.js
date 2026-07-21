@@ -125,7 +125,11 @@ async function loadStats() {
 }
 
 async function runAutoDraft() {
-  flash(appFlash, "Analyzing newest transcripts with Claude Fable 5…", "");
+  flash(
+    appFlash,
+    "Refining transcripts into topics + autofilling weather & tides…",
+    ""
+  );
   try {
     const { draft } = await api("/api/admin/auto-draft", {
       method: "POST",
@@ -135,10 +139,10 @@ async function runAutoDraft() {
       flash(appFlash, draft.reason || "Nothing to draft.", "err");
       return;
     }
-    const kind = draft.sourceKind || "source";
+    const topics = draft.topicCount ?? draft.findingCount;
     flash(
       appFlash,
-      `Draft ready from ${draft.findingCount} ${kind}${draft.findingCount === 1 ? "" : "s"} — review & schedule it.`,
+      `Draft ready — ${topics} topic${topics === 1 ? "" : "s"} from ${draft.findingCount} source${draft.findingCount === 1 ? "" : "s"} (weather & tides filled).`,
       "ok"
     );
     selectTab("review");
@@ -718,7 +722,7 @@ document.getElementById("generate-claude-btn")?.addEventListener("click", async 
   }
   const btn = document.getElementById("generate-claude-btn");
   if (btn instanceof HTMLButtonElement) btn.disabled = true;
-  flash(appFlash, "Claude is writing this issue…", "");
+  flash(appFlash, "Claude is refining topics and rewriting this issue…", "");
   try {
     const result = await api(`/api/admin/issues/${selectedIssueId}/generate`, {
       method: "POST",
@@ -730,6 +734,30 @@ document.getElementById("generate-claude-btn")?.addEventListener("click", async 
       `Claude draft saved (${result.model}). Review before sending.`,
       "ok"
     );
+    await loadIssues();
+    await loadStories(selectedIssueId);
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  } finally {
+    if (btn instanceof HTMLButtonElement) btn.disabled = false;
+  }
+});
+
+document.getElementById("autofill-marine-btn")?.addEventListener("click", async () => {
+  if (!selectedIssueId) {
+    flash(appFlash, "Save or open an issue first.", "err");
+    return;
+  }
+  const btn = document.getElementById("autofill-marine-btn");
+  if (btn instanceof HTMLButtonElement) btn.disabled = true;
+  flash(appFlash, "Fetching Ketchikan weather & NOAA tides…", "");
+  try {
+    const { issue } = await api(`/api/admin/issues/${selectedIssueId}/marine`, {
+      method: "POST",
+      body: JSON.stringify({ force: true }),
+    });
+    fillIssueForm(issue);
+    flash(appFlash, "Weather and tides updated.", "ok");
     await loadIssues();
   } catch (err) {
     flash(appFlash, err.message, "err");
