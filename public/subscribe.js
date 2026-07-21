@@ -32,7 +32,7 @@ form?.addEventListener("submit", async (event) => {
     if (!res.ok) throw new Error(payload.error || "Could not subscribe.");
 
     message.className = "message ok";
-    message.textContent = `You're on the list${first_name ? `, ${first_name}` : ""}. Watch your inbox.`;
+    message.textContent = `You're on the list${first_name ? `, ${first_name}` : ""}. Check your inbox for a confirmation email.`;
     form.reset();
   } catch (err) {
     message.className = "message err";
