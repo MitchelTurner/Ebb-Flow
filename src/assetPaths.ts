@@ -33,6 +33,13 @@ export function resolveTemplatesDir(): string {
 
 export function resolveBrandFile(filename: string): string | null {
   const publicDir = resolvePublicDir();
-  const path = join(publicDir, "brand", filename);
-  return existsSync(path) ? path : null;
+  const candidates = [
+    join(publicDir, "brand", filename),
+    // Allow a root public/logo.png upload as a fallback for logo.png
+    ...(filename === "logo.png" ? [join(publicDir, "logo.png")] : []),
+  ];
+  for (const path of candidates) {
+    if (existsSync(path)) return path;
+  }
+  return null;
 }

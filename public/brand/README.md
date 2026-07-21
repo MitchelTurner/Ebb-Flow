@@ -1,16 +1,16 @@
 # Brand logo
 
-Drop your logo here as:
+Primary file:
 
 ```
 public/brand/logo.png
 ```
 
-That single file is used for:
+Also accepted (fallback):
 
-- Public site (`/`)
-- Admin
-- Email masthead (inline CID)
-- Favicon / apple-touch icon
+```
+public/logo.png
+```
 
-Prefer a **transparent PNG** (no background). No other logo filenames are required.
+Used for the public site, admin, email masthead (inline CID), and favicon.
+Prefer a transparent PNG.
