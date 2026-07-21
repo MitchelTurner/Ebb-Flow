@@ -1,17 +1,18 @@
 # Brand marks
 
-Transparent paper-boat marks for The Ebb & Flow.
+Quill + paper-boat mark for The Ebb & Flow (gold on transparent / navy on transparent).
 
 | File | Use on |
 |------|--------|
-| `logo-mark-light.svg` / `logo-mark-light-*.png` | Dark / navy surfaces (email masthead, public hero, admin) |
-| `logo-mark-dark.svg` / `logo-mark-dark-*.png` | Light / cream surfaces |
-| `logo-quill-*.svg` | Optional quill-mast variant |
+| `logo-mark-light.svg` / `logo-mark-light-*.png` | Dark / navy surfaces (email masthead, public hero, admin) — **gold** |
+| `logo-mark-dark.svg` / `logo-mark-dark-*.png` | Light / cream surfaces — **navy** |
+| `logo-quill-*.svg` | Same mark (alias) |
+| `favicon-32.png` / `apple-touch-icon.png` | Browser icons |
 
-All marks have **no background** (transparent). Pick light vs dark so the boat contrasts with whatever sits behind it.
+All marks have **no background** (transparent).
 
-**Email:** the masthead logo is embedded inline (`cid:ebb-flow-logo`) from `logo-mark-light-128.png` so it does not depend on `APP_URL`.
+**Email:** masthead logo is embedded inline (`cid:ebb-flow-logo`) from `logo-mark-light-128.png`.
 
-**Site / admin:** served from `/brand/…` via Express static files (also copied into `dist/public` on build).
+**Site / admin:** `/brand/logo-mark-light.svg` on dark UI.
 
-To swap in original artwork: replace these files (keep the same names/sizes) and redeploy.
+To swap in exact original artwork: replace these files (same names) and redeploy.

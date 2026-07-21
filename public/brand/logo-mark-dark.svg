@@ -1,11 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" fill="none" role="img" aria-label="The Ebb and Flow">
-  <!-- Transparent. Navy mark for cream and light surfaces. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" role="img" aria-label="The Ebb and Flow">
+  <!-- Navy quill + paper boat + water. Transparent. For cream/light surfaces. -->
   <g fill="#16293a">
-    <path d="M18 128c16-9 32-7 48-1 14 4 26 3 40-3 16-7 30-6 46 1 11 4 20 3 30-2v11c-12 7-25 8-39 2-14-5-27-4-41 3-16 8-30 7-46 0-12-5-25-6-38 0v-11z"/>
-    <path d="M28 108 L84 68 L110 108 Z"/>
-    <path d="M182 108 L126 68 L110 108 Z"/>
-    <path d="M84 68 L110 28 L126 68 Z"/>
+    <path d="M36 208
+      C54 188, 84 182, 112 192
+      C132 198, 154 190, 178 176
+      C196 166, 218 170, 236 184
+      C238 198, 228 212, 208 216
+      C186 222, 162 216, 140 204
+      C122 196, 100 200, 78 212
+      C60 220, 42 220, 36 208 Z"/>
+    <path d="M40 172 L100 128 L128 172 L156 128 L216 172
+      L188 172 L128 148 L68 172 Z"/>
+    <path d="M68 172 L128 148 L188 172 L128 172 Z" fill-opacity="0.92"/>
+    <path d="M108 128 L128 92 L148 128 Z"/>
+    <path d="M124 96 L132 96 L138 44 L130 34 Z"/>
+    <path d="M130 34 L154 14 L140 44 Z"/>
+    <path d="M134 46 C150 36, 172 26, 196 20 L190 32 C170 36, 152 44, 138 54 Z"/>
+    <path d="M136 58 C154 48, 178 40, 204 36 L198 48 C176 50, 156 58, 142 68 Z"/>
+    <path d="M138 72 C156 64, 180 58, 206 58 L200 70 C178 68, 158 74, 144 84 Z"/>
+    <path d="M140 86 C154 80, 174 78, 194 82 L188 94 C170 88, 154 90, 144 98 Z"/>
   </g>
-  <path d="M98 38 L110 28 L112 44 L102 62 Z" fill="#f7f3ec" fill-opacity="0.95"/>
+  <path d="M120 108 L128 92 L131 112 L124 132 Z" fill="#f7f3ec" fill-opacity="0.92"/>
 </svg>
