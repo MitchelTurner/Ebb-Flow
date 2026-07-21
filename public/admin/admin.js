@@ -961,12 +961,17 @@ function renderFactReview(result) {
             ${escapeHtml(f.issue)}<br>
             <span class="muted">Evidence: ${escapeHtml(f.evidence || "—")}</span><br>
             <span class="muted">Fix: ${escapeHtml(f.suggestion || "—")}</span>
+            ${
+              f.source_url
+                ? `<br><a href="${escapeAttr(f.source_url)}" target="_blank" rel="noopener">Web source</a>`
+                : ""
+            }
           </div>`
         )
         .join("")
-    : `<p class="pass">No name/detail issues flagged.</p>`;
+    : `<p class="pass">No name/detail issues flagged against transcripts or the web.</p>`;
 
-  panel.innerHTML = `<h4>AI fact-check</h4>
+  panel.innerHTML = `<h4>AI fact-check (transcripts + web)</h4>
     <p>${escapeHtml(result.summary || "")}${
       result.applied ? " Corrections were applied to the draft." : ""
     }</p>
@@ -987,7 +992,11 @@ document.getElementById("fact-review-btn")?.addEventListener("click", async () =
   }
   const btn = document.getElementById("fact-review-btn");
   if (btn instanceof HTMLButtonElement) btn.disabled = true;
-  flash(appFlash, "Fact-checking names and details against transcripts…", "");
+  flash(
+    appFlash,
+    "Fact-checking against transcripts and the public web…",
+    ""
+  );
   try {
     const result = await api(`/api/admin/issues/${selectedIssueId}/fact-review`, {
       method: "POST",
@@ -1000,7 +1009,7 @@ document.getElementById("fact-review-btn")?.addEventListener("click", async () =
     flash(
       appFlash,
       result.ok
-        ? "Fact-check passed."
+        ? "Fact-check passed (transcripts + web)."
         : result.applied
           ? `Fact-check fixed ${result.findings.filter((f) => f.severity === "error").length} error(s).`
           : "Fact-check found issues.",

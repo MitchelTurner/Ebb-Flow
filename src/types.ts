@@ -46,6 +46,8 @@ export type FactReviewFinding = {
   issue: string;
   evidence: string;
   suggestion: string;
+  /** Public web source URL when the finding came from internet verification. */
+  source_url?: string | null;
 };
 
 export interface Story {

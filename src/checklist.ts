@@ -71,7 +71,7 @@ export function buildEditorialChecklist(
     },
     {
       id: "fact_review",
-      label: "AI fact-check run against transcripts",
+      label: "AI fact-check run (transcripts + web)",
       pass: Boolean(issue.fact_reviewed_at),
       required: true,
     },
