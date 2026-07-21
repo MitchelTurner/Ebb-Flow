@@ -36,7 +36,10 @@ import {
   deleteTranscript,
   listTranscripts,
 } from "./sources.js";
-import { generateAndSaveIssue } from "./generate.js";
+import {
+  applyMarineAutofill,
+  generateAndSaveIssue,
+} from "./generate.js";
 import { sendNewsletter } from "./send.js";
 import type { IssueStatus, SubscriberStatus, TaskStatus } from "./types.js";
 
@@ -317,6 +320,17 @@ export function createApiRouter(config: AppConfig): Router {
     try {
       const result = await generateAndSaveIssue(config, req.params.id);
       res.json({ ok: true, ...result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, error: message });
+    }
+  });
+
+  router.post("/admin/issues/:id/marine", guard, async (req, res) => {
+    try {
+      const force = req.body?.force !== false;
+      const issue = await applyMarineAutofill(config, req.params.id, { force });
+      res.json({ ok: true, issue });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ ok: false, error: message });

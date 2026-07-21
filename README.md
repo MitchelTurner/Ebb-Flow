@@ -103,12 +103,14 @@ If you ever see `relation "subscribers" does not exist`, redeploy the web servic
 ## Editorial workflow
 
 1. Add **Transcripts** (meeting / interview text) in Admin → Transcripts, or insert into the `transcripts` table. Short tip-style **Findings** are a fallback when no unused transcripts exist.
-2. Claude Fable 5 **analyzes** the newest unused transcripts and auto-drafts a review issue that fills the email template (on boot, `/cron/auto-draft`, or Admin → Draft from newest transcripts).
-3. In **Review & schedule**, preview the draft, edit if needed, then **Approve & schedule** a delivery time.
+2. Claude Fable 5 **refines** those transcripts into digestible topics (split/merge as needed), autofills **Ketchikan weather + NOAA tides**, and drafts a review issue for the email template (on boot, `/cron/auto-draft`, or Admin → Draft from newest transcripts).
+3. In **Review & schedule**, preview the draft, edit if needed, then **Approve & schedule** a delivery time. Use **Autofill weather & tides** on an issue to refresh marine fields anytime.
 4. Cron `POST /cron/send` (or `npm run start:send`) delivers due `ready` issues when `scheduled_for` has passed.
 5. After send, status becomes `sent`.
 
 Draft source priority: `transcripts` table → other public tables named like `%transcript%` / `%recording%` → `findings`.
+
+Weather uses Open-Meteo; tides use NOAA CO-OPS station `9450460` (Ketchikan). Override with `MARINE_LATITUDE`, `MARINE_LONGITUDE`, `MARINE_TIMEZONE`, `TIDE_STATION_ID`.
 
 ### Claude auto-write
 

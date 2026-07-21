@@ -76,6 +76,12 @@ export function getConfig() {
     findingsBatchSize: process.env.FINDINGS_BATCH_SIZE
       ? Number.parseInt(process.env.FINDINGS_BATCH_SIZE, 10)
       : 6,
+    /** Ketchikan / Tongass Narrows defaults for weather + tides autofill. */
+    marineLatitude: Number.parseFloat(optional("MARINE_LATITUDE") ?? "55.3422"),
+    marineLongitude: Number.parseFloat(optional("MARINE_LONGITUDE") ?? "-131.6461"),
+    marineTimezone: optional("MARINE_TIMEZONE") ?? "America/Juneau",
+    /** NOAA CO-OPS station — Ketchikan, AK */
+    tideStationId: optional("TIDE_STATION_ID") ?? "9450460",
     issueId: optional("ISSUE_ID"),
     dryRun: bool("DRY_RUN", false),
     maxRecipients: process.env.MAX_RECIPIENTS
