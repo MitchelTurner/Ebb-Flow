@@ -21,7 +21,7 @@ const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ISSUE_SELECT = `id, issue_date::text, volume_label, subject, preheader, intro,
   weather, high_tides, low_tides, high_tide_label, coming_up,
   cta_url, cta_label, tip_headline, tip_body, postal_address, status,
-  scheduled_for::text, created_at::text, updated_at::text, sent_at::text`;
+  scheduled_for::text, fact_reviewed_at::text, created_at::text, updated_at::text, sent_at::text`;
 
 let pool: pg.Pool | undefined;
 
@@ -308,6 +308,7 @@ export async function updateIssue(
        postal_address = $16,
        status = $17,
        scheduled_for = $18,
+       fact_reviewed_at = $19::timestamptz,
        updated_at = now()
      WHERE id = $1
      RETURNING ${ISSUE_SELECT}`,
@@ -330,6 +331,7 @@ export async function updateIssue(
       next.postal_address,
       next.status,
       next.scheduled_for ?? null,
+      next.fact_reviewed_at ?? null,
     ]
   );
   return rows[0] ?? null;

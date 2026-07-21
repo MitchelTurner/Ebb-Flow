@@ -216,10 +216,12 @@
           <div style="grid-column:1/-1; display:flex; gap:0.5rem; flex-wrap:wrap">
             <button type="submit">Save issue</button>
             <button type="button" class="secondary" id="generate-claude-btn">Rewrite with Claude</button>
+            <button type="button" class="secondary" id="fact-review-btn">AI fact-check</button>
             <button type="button" class="secondary" id="autofill-marine-btn">Autofill weather &amp; tides</button>
             <button type="button" class="secondary" id="send-dry-btn">Dry-run send</button>
             <button type="button" id="send-live-btn">Send now</button>
           </div>
+          <div id="fact-review-panel" class="fact-review-panel muted" style="grid-column:1/-1"></div>
           <div class="grid-form cols-2" style="grid-column:1/-1; margin-top:0.5rem">
             <label>Email me a preview
               <input type="email" id="preview-email-input" placeholder="you@example.com">

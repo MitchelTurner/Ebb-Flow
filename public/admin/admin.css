@@ -524,6 +524,24 @@ tbody tr:hover { background: rgba(232, 238, 243, 0.025); }
 .checklist-panel .pass { color: var(--ok); }
 .checklist-panel .fail { color: var(--danger); }
 
+.fact-review-panel {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  background: rgba(14, 23, 33, 0.55);
+}
+.fact-review-panel h4 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--serif);
+  color: var(--ink);
+}
+.fact-review-panel .finding {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+.fact-review-panel .finding.error { color: var(--danger); }
+.fact-review-panel .finding.warning { color: var(--gold); }
+
 .muted {
   color: var(--mute);
   font-size: 0.9rem;

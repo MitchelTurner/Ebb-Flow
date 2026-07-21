@@ -2,8 +2,21 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { RecentStoryRef } from "./dedup.js";
 import type { DraftSource } from "./sources.js";
 import { sourceToNotes } from "./sources.js";
-import type { Issue, ProposalTopic, Story } from "./types.js";
+import type {
+  FactReviewFinding,
+  Issue,
+  ProposalTopic,
+  Story,
+} from "./types.js";
 import { randomUUID } from "node:crypto";
+
+export type FactReviewResult = {
+  ok: boolean;
+  summary: string;
+  findings: FactReviewFinding[];
+  /** Corrected copy when errors were found (or null if clean / no rewrite). */
+  corrected: GeneratedIssueCopy | null;
+};
 
 export interface GeneratedStoryCopy {
   position: number;
@@ -30,7 +43,19 @@ const SYSTEM = `You are the newsroom editor for "The Ebb & Flow", a warm weekly 
 
 Voice: neighborly, clear, specific, never corporate. Short sentences. No emojis. No hype.
 
-Your job is to REFINE raw meeting/interview transcripts into a small set of digestible newsletter TOPICS, then write polished copy for each topic that fits a weekly email template (up to 6 stories).`;
+Your job is to REFINE raw meeting/interview transcripts into a small set of digestible newsletter TOPICS, then write polished copy for each topic that fits a weekly email template (up to 6 stories).
+
+Accuracy rules (critical):
+- Copy names, titles, vote counts, dollar amounts, dates, and places EXACTLY as they appear in the source transcript/notes.
+- Never invent or "correct" a person's name. If unsure, use a role ("the harbor master") or omit the name.
+- Never invent quotes. If the exact words are not in the source, set quote to null.`;
+
+const REVIEW_SYSTEM = `You are a meticulous fact-checker for "The Ebb & Flow", a local newsletter for Ketchikan / Tongass Narrows, Alaska.
+
+Compare draft newsletter copy ONLY against the provided source_notes / transcript excerpts.
+Flag wrong names, misspelled names, invented people, wrong vote counts, wrong dates, wrong dollar amounts, and fabricated quotes.
+Do not invent new facts. Prefer removing unsupported details over guessing.
+No emojis. Return JSON only.`;
 
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -64,12 +89,14 @@ export const CLAUDE_MODEL = "claude-fable-5" as const;
 async function callClaudeJson(params: {
   apiKey: string;
   userPrompt: string;
+  system?: string;
+  maxTokens?: number;
 }): Promise<unknown> {
   const client = new Anthropic({ apiKey: params.apiKey });
   const response = await client.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 16000,
-    system: SYSTEM,
+    max_tokens: params.maxTokens ?? 16000,
+    system: params.system ?? SYSTEM,
     messages: [{ role: "user", content: params.userPrompt }],
   });
 
@@ -414,5 +441,134 @@ function normalizeGenerated(
     intro: String(parsed.intro ?? "").trim(),
     coming_up: comingUp,
     stories,
+  };
+}
+
+/**
+ * Fact-check draft copy against each story's source_notes / transcript excerpts.
+ * Returns findings and a corrected rewrite when errors are present.
+ */
+export async function factReviewIssue(params: {
+  apiKey: string;
+  issue: Issue;
+  stories: Story[];
+}): Promise<FactReviewResult> {
+  if (!params.stories.length) {
+    throw new Error("Add stories before running AI fact-check.");
+  }
+
+  const hasGrounding = params.stories.some((s) => s.source_notes?.trim());
+  if (!hasGrounding) {
+    throw new Error(
+      "Stories need source notes (transcript grounding) for AI fact-check."
+    );
+  }
+
+  const userPrompt = `Fact-check this draft newsletter against the source_notes for each story.
+
+Draft issue:
+${JSON.stringify(
+  {
+    subject: params.issue.subject,
+    preheader: params.issue.preheader,
+    intro: params.issue.intro,
+    coming_up: params.issue.coming_up,
+  },
+  null,
+  2
+)}
+
+Stories (source_notes are the only allowed evidence):
+${JSON.stringify(params.stories.map(storyInput), null, 2)}
+
+Return ONLY valid JSON:
+{
+  "ok": true,
+  "summary": "one sentence overall verdict",
+  "findings": [
+    {
+      "severity": "error" | "warning",
+      "field": "summary|title|quote|intro|subject|why_it_matters|quote_attribution|coming_up|other",
+      "story_position": 1,
+      "issue": "what is wrong",
+      "evidence": "short quote or paraphrase from source_notes proving the correction, or 'not in sources'",
+      "suggestion": "how to fix"
+    }
+  ],
+  "corrected": {
+    "subject": "...",
+    "preheader": "...",
+    "intro": "...",
+    "coming_up": ["..."],
+    "stories": [
+      {
+        "position": 1,
+        "toc_title": "...",
+        "title": "...",
+        "eyebrow": "...",
+        "summary": "...",
+        "why_it_matters": "...",
+        "quote": null,
+        "quote_attribution": null
+      }
+    ]
+  }
+}
+
+Rules:
+- Treat source_notes as ground truth. If a name/detail is not supported, it is an error.
+- Focus on names, titles/roles, votes, numbers, dates, places, and quotes.
+- severity "error" = factually wrong or unsupported; "warning" = unclear/ambiguous.
+- If ok is true and there are no errors, set corrected to null.
+- If there are any errors, corrected MUST include every story position with fixes applied (remove unsupported names/details rather than inventing replacements).
+- Keep the newsletter voice. Do not add new news.`;
+
+  const parsed = (await callClaudeJson({
+    apiKey: params.apiKey,
+    userPrompt,
+    system: REVIEW_SYSTEM,
+    maxTokens: 16000,
+  })) as {
+    ok?: boolean;
+    summary?: string;
+    findings?: FactReviewFinding[];
+    corrected?: GeneratedIssueCopy | null;
+  };
+
+  const findings: FactReviewFinding[] = Array.isArray(parsed.findings)
+    ? parsed.findings.map((f) => ({
+        severity: f.severity === "warning" ? "warning" : "error",
+        field: String(f.field ?? "other"),
+        story_position:
+          f.story_position == null || Number.isNaN(Number(f.story_position))
+            ? null
+            : Number(f.story_position),
+        issue: String(f.issue ?? "").trim(),
+        evidence: String(f.evidence ?? "").trim(),
+        suggestion: String(f.suggestion ?? "").trim(),
+      }))
+    : [];
+
+  const hasErrors = findings.some((f) => f.severity === "error");
+  let corrected: GeneratedIssueCopy | null = null;
+  if (parsed.corrected && typeof parsed.corrected === "object") {
+    try {
+      corrected = normalizeGenerated(parsed.corrected, params.stories);
+    } catch {
+      corrected = null;
+    }
+  }
+
+  const ok = Boolean(parsed.ok) && !hasErrors;
+
+  return {
+    ok,
+    summary:
+      String(parsed.summary ?? "").trim() ||
+      (ok
+        ? "No factual errors found against the source notes."
+        : "Fact-check found issues that need correction."),
+    findings,
+    corrected: ok ? null : corrected,
   };
 }

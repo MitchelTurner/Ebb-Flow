@@ -40,6 +40,7 @@ import {
 import { buildEditorialChecklist } from "./checklist.js";
 import {
   applyMarineAutofill,
+  factReviewAndMaybeApply,
   generateAndSaveIssue,
 } from "./generate.js";
 import {
@@ -338,6 +339,24 @@ export function createApiRouter(config: AppConfig): Router {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ ok: false, error: message });
+    }
+  });
+
+  router.post("/admin/issues/:id/fact-review", guard, async (req, res) => {
+    try {
+      const apply =
+        req.body?.apply === undefined ? undefined : Boolean(req.body.apply);
+      const result = await factReviewAndMaybeApply(config, req.params.id, {
+        apply,
+      });
+      res.json({
+        success: true,
+        review_ok: result.ok,
+        ...result,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ success: false, error: message });
     }
   });
 

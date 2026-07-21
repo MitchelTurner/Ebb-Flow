@@ -32,10 +32,21 @@ export interface Issue {
   postal_address: string;
   status: IssueStatus;
   scheduled_for: string | null;
+  /** Set when AI fact-check against transcripts last passed/applied. */
+  fact_reviewed_at: string | null;
   created_at?: string;
   updated_at?: string;
   sent_at?: string | null;
 }
+
+export type FactReviewFinding = {
+  severity: "error" | "warning";
+  field: string;
+  story_position: number | null;
+  issue: string;
+  evidence: string;
+  suggestion: string;
+};
 
 export interface Story {
   id: string;
