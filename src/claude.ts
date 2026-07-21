@@ -52,10 +52,17 @@ Accuracy rules (critical):
 
 const REVIEW_SYSTEM = `You are a meticulous fact-checker for "The Ebb & Flow", a local newsletter for Ketchikan / Tongass Narrows, Alaska.
 
-Compare draft newsletter copy ONLY against the provided source_notes / transcript excerpts.
-Flag wrong names, misspelled names, invented people, wrong vote counts, wrong dates, wrong dollar amounts, and fabricated quotes.
-Do not invent new facts. Prefer removing unsupported details over guessing.
-No emojis. Return JSON only.`;
+You MUST use the web_search tool to verify checkable claims against public internet sources
+(city/borough sites, Alaska news outlets, official agendas/minutes, NOAA, etc.).
+
+Check both:
+1) Draft copy vs transcript/source_notes (names, quotes, votes must appear in the transcript).
+2) Transcript and draft claims vs the public web (correct spelling of officials, real orgs, meeting outcomes, dates).
+
+If the web contradicts the transcript, flag it as a warning and prefer careful wording over inventing a "corrected" fact.
+If a name/detail is unsupported by both transcript and web, treat it as an error and remove it in corrections.
+Do not invent new news. Prefer omitting unsupported details over guessing.
+No emojis. After searching, return JSON only as your final answer.`;
 
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -108,6 +115,78 @@ async function callClaudeJson(params: {
 
   if (!text) {
     throw new Error("Claude returned an empty response");
+  }
+
+  return extractJson(text);
+}
+
+function textFromMessage(content: Anthropic.Messages.ContentBlock[]): string {
+  return content
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+}
+
+/**
+ * Claude Messages call with Anthropic web_search (server tool), including
+ * pause_turn continuation so multi-search fact-checks can finish.
+ */
+async function callClaudeJsonWithWebSearch(params: {
+  apiKey: string;
+  userPrompt: string;
+  system?: string;
+  maxTokens?: number;
+  maxSearches?: number;
+}): Promise<unknown> {
+  const client = new Anthropic({ apiKey: params.apiKey });
+  const messages: Anthropic.Messages.MessageParam[] = [
+    { role: "user", content: params.userPrompt },
+  ];
+
+  const tools: Anthropic.Messages.WebSearchTool20250305[] = [
+    {
+      type: "web_search_20250305",
+      name: "web_search",
+      max_uses: params.maxSearches ?? 12,
+      allowed_callers: ["direct"],
+      user_location: {
+        type: "approximate",
+        city: "Ketchikan",
+        region: "Alaska",
+        country: "US",
+        timezone: "America/Juneau",
+      },
+    },
+  ];
+
+  let response = await client.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: params.maxTokens ?? 16000,
+    system: params.system ?? REVIEW_SYSTEM,
+    messages,
+    tools,
+  });
+
+  // Continue when the API pauses a long server-tool turn.
+  let guards = 0;
+  while (response.stop_reason === "pause_turn" && guards < 6) {
+    guards += 1;
+    messages.push({ role: "assistant", content: response.content });
+    response = await client.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: params.maxTokens ?? 16000,
+      system: params.system ?? REVIEW_SYSTEM,
+      messages,
+      tools,
+    });
+  }
+
+  const text = textFromMessage(response.content);
+  if (!text) {
+    throw new Error(
+      "Claude web fact-check returned no text. Try again, or check that web search is enabled for your API key."
+    );
   }
 
   return extractJson(text);
@@ -445,8 +524,8 @@ function normalizeGenerated(
 }
 
 /**
- * Fact-check draft copy against each story's source_notes / transcript excerpts.
- * Returns findings and a corrected rewrite when errors are present.
+ * Fact-check draft + transcript notes against each other and the public web.
+ * Uses Anthropic web_search. Returns findings and a corrected rewrite when needed.
  */
 export async function factReviewIssue(params: {
   apiKey: string;
@@ -464,7 +543,9 @@ export async function factReviewIssue(params: {
     );
   }
 
-  const userPrompt = `Fact-check this draft newsletter against the source_notes for each story.
+  const userPrompt = `Fact-check this Ketchikan / Tongass Narrows newsletter draft.
+
+You MUST use web_search for checkable names, titles, organizations, meeting outcomes, votes, dates, and places mentioned in the draft or in source_notes/transcripts.
 
 Draft issue:
 ${JSON.stringify(
@@ -473,26 +554,33 @@ ${JSON.stringify(
     preheader: params.issue.preheader,
     intro: params.issue.intro,
     coming_up: params.issue.coming_up,
+    issue_date: params.issue.issue_date,
   },
   null,
   2
 )}
 
-Stories (source_notes are the only allowed evidence):
+Stories (source_notes contain transcript excerpts):
 ${JSON.stringify(params.stories.map(storyInput), null, 2)}
 
-Return ONLY valid JSON:
+Search examples to run (adapt to the actual claims):
+- "[person name] Ketchikan" or "[role] Ketchikan"
+- "Ketchikan [meeting/board] [topic] [year]"
+- official city/borough/harbor/library pages when relevant
+
+Return ONLY valid JSON as your final answer (after searches):
 {
   "ok": true,
   "summary": "one sentence overall verdict",
   "findings": [
     {
       "severity": "error" | "warning",
-      "field": "summary|title|quote|intro|subject|why_it_matters|quote_attribution|coming_up|other",
+      "field": "summary|title|quote|intro|subject|why_it_matters|quote_attribution|coming_up|source_notes|other",
       "story_position": 1,
       "issue": "what is wrong",
-      "evidence": "short quote or paraphrase from source_notes proving the correction, or 'not in sources'",
-      "suggestion": "how to fix"
+      "evidence": "short support from transcript AND/OR web (say which)",
+      "suggestion": "how to fix",
+      "source_url": "https://… or null"
     }
   ],
   "corrected": {
@@ -516,18 +604,21 @@ Return ONLY valid JSON:
 }
 
 Rules:
-- Treat source_notes as ground truth. If a name/detail is not supported, it is an error.
-- Focus on names, titles/roles, votes, numbers, dates, places, and quotes.
-- severity "error" = factually wrong or unsupported; "warning" = unclear/ambiguous.
+- Verify draft details against transcripts first (quotes/names must appear in source_notes).
+- Also verify checkable claims on the public web; include source_url when a web page supports or contradicts a claim.
+- If web and transcript disagree, severity "warning" and suggest cautious wording — do not invent a new "corrected" name from thin air.
+- If unsupported by transcript and unverified/contradicted online, severity "error" and remove/soften in corrected copy.
+- Focus on names, titles/roles, orgs, votes, numbers, dates, places, and quotes.
 - If ok is true and there are no errors, set corrected to null.
-- If there are any errors, corrected MUST include every story position with fixes applied (remove unsupported names/details rather than inventing replacements).
-- Keep the newsletter voice. Do not add new news.`;
+- If there are any errors, corrected MUST include every story position with fixes applied.
+- Keep the newsletter voice. Do not add new news from the web that was not in the transcript.`;
 
-  const parsed = (await callClaudeJson({
+  const parsed = (await callClaudeJsonWithWebSearch({
     apiKey: params.apiKey,
     userPrompt,
     system: REVIEW_SYSTEM,
     maxTokens: 16000,
+    maxSearches: 12,
   })) as {
     ok?: boolean;
     summary?: string;
@@ -546,6 +637,7 @@ Rules:
         issue: String(f.issue ?? "").trim(),
         evidence: String(f.evidence ?? "").trim(),
         suggestion: String(f.suggestion ?? "").trim(),
+        source_url: f.source_url ? String(f.source_url).trim() : null,
       }))
     : [];
 
@@ -566,7 +658,7 @@ Rules:
     summary:
       String(parsed.summary ?? "").trim() ||
       (ok
-        ? "No factual errors found against the source notes."
+        ? "No factual errors found against transcripts and web sources."
         : "Fact-check found issues that need correction."),
     findings,
     corrected: ok ? null : corrected,
