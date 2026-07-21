@@ -222,25 +222,9 @@ export async function startServer(config: AppConfig): Promise<void> {
     console.warn(`Warning: public directory not found at ${publicDir}`);
   }
 
-  // Schema uses IF NOT EXISTS, so this is safe on every boot.
-  await ensureSchema(config.databaseUrl);
-
-  if (config.autoDraftFromFindings) {
-    try {
-      const draft = await autoDraftFromNewestFindings(config);
-      if (draft.drafted) {
-        console.log(
-          `Auto-drafted issue ${draft.result?.issue.id} from ${draft.findingCount} ${draft.sourceKind || "source"}(s) in ${draft.sourceTable || "database"}`
-        );
-      } else {
-        console.log(`Auto-draft skipped: ${draft.reason}`);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(`Auto-draft failed: ${message}`);
-    }
-  }
-
+  // Bind the port first so Railway healthchecks (/health) succeed quickly.
+  // Schema + Claude auto-draft can take longer than healthcheckTimeout and
+  // previously blocked listen(), which made the UI show "Failed to fetch".
   const app = createServer(config);
   await new Promise<void>((resolve) => {
     app.listen(config.port, () => {
@@ -249,6 +233,34 @@ export async function startServer(config: AppConfig): Promise<void> {
       resolve();
     });
   });
+
+  void runBootJobs(config);
+}
+
+async function runBootJobs(config: AppConfig): Promise<void> {
+  try {
+    // Schema uses IF NOT EXISTS / ADD COLUMN IF NOT EXISTS — safe every boot.
+    await ensureSchema(config.databaseUrl);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`Schema migrate failed (server still up): ${message}`);
+  }
+
+  if (!config.autoDraftFromFindings) return;
+
+  try {
+    const draft = await autoDraftFromNewestFindings(config);
+    if (draft.drafted) {
+      console.log(
+        `Auto-drafted issue ${draft.result?.issue.id} from ${draft.findingCount} ${draft.sourceKind || "source"}(s) in ${draft.sourceTable || "database"}`
+      );
+    } else {
+      console.log(`Auto-draft skipped: ${draft.reason}`);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`Auto-draft failed: ${message}`);
+  }
 }
 
 function escape(value: string): string {
