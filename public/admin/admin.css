@@ -833,6 +833,17 @@ tbody tr:hover { background: rgba(232, 238, 243, 0.03); }
 .checklist-panel .pass { color: var(--ok); }
 .checklist-panel .fail { color: var(--danger); }
 
+.fact-review-panel .pass { color: var(--ok); }
+.fact-review-panel .fail { color: var(--danger); }
+.fact-review-panel .name-gate-label {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
 .fact-review-panel {
   padding: var(--space-3);
   border: 1px solid var(--line);

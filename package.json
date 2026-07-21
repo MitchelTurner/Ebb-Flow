@@ -20,7 +20,8 @@
     "start": "node dist/cli.js serve",
     "start:send": "node dist/cli.js send",
     "typecheck": "tsc --noEmit",
-    "smoke": "tsx src/smoke-render.ts"
+    "smoke": "tsx src/smoke-render.ts",
+    "smoke:names": "tsx src/nameCheck.smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",

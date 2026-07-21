@@ -969,10 +969,13 @@ function renderFactReview(result) {
   const panel = document.getElementById("fact-review-panel");
   if (!panel) return;
   const findings = result.findings || [];
-  const findingHtml = findings.length
-    ? findings
-        .map(
-          (f) => `<div class="finding ${escapeHtml(f.severity)}">
+  const nameFindings = findings.filter((f) =>
+    String(f.evidence || "").includes("Deterministic name gate")
+  );
+  const otherFindings = findings.filter(
+    (f) => !String(f.evidence || "").includes("Deterministic name gate")
+  );
+  const renderFinding = (f) => `<div class="finding ${escapeHtml(f.severity)}">
             <strong>${escapeHtml(f.severity)}</strong>
             ${f.story_position != null ? ` · story ${f.story_position}` : ""}
             · ${escapeHtml(f.field)}<br>
@@ -984,15 +987,35 @@ function renderFactReview(result) {
                 ? `<br><a href="${escapeAttr(f.source_url)}" target="_blank" rel="noopener">Web source</a>`
                 : ""
             }
-          </div>`
-        )
-        .join("")
+          </div>`;
+  const findingHtml = findings.length
+    ? `${
+        nameFindings.length
+          ? `<p class="name-gate-label">Name gate (${nameFindings.length})</p>${nameFindings
+              .map(renderFinding)
+              .join("")}`
+          : ""
+      }${
+        otherFindings.length
+          ? `<p class="name-gate-label">Transcript + web</p>${otherFindings
+              .map(renderFinding)
+              .join("")}`
+          : ""
+      }`
     : `<p class="pass">No name/detail issues flagged against transcripts or the web.</p>`;
 
-  panel.innerHTML = `<h4>AI fact-check (transcripts + web)</h4>
+  const gateLabel =
+    result.name_gate_ok === false
+      ? `<p class="fail">Name gate: failed — unsupported person names were flagged or stripped.</p>`
+      : result.name_gate_ok
+        ? `<p class="pass">Name gate: passed — every person-like name appears in transcript grounding.</p>`
+        : "";
+
+  panel.innerHTML = `<h4>AI fact-check (transcripts + web + names)</h4>
     <p>${escapeHtml(result.summary || "")}${
       result.applied ? " Corrections were applied to the draft." : ""
     }</p>
+    ${gateLabel}
     ${findingHtml}
     ${
       !result.ok && result.corrected && !result.applied
@@ -1012,7 +1035,7 @@ document.getElementById("fact-review-btn")?.addEventListener("click", async () =
   if (btn instanceof HTMLButtonElement) btn.disabled = true;
   flash(
     appFlash,
-    "Fact-checking against transcripts and the public web…",
+    "Fact-checking names against transcripts, then the public web…",
     ""
   );
   try {
@@ -1027,9 +1050,9 @@ document.getElementById("fact-review-btn")?.addEventListener("click", async () =
     flash(
       appFlash,
       result.ok
-        ? "Fact-check passed (transcripts + web)."
+        ? "Fact-check passed (transcripts + web + name gate)."
         : result.applied
-          ? `Fact-check fixed ${result.findings.filter((f) => f.severity === "error").length} error(s).`
+          ? `Fact-check updated draft (${result.findings.filter((f) => f.severity === "error").length} error(s) flagged). Re-check names in the panel.`
           : "Fact-check found issues.",
       result.ok ? "ok" : "err"
     );

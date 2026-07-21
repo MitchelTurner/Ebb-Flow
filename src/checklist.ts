@@ -1,3 +1,4 @@
+import { checkIssueNames } from "./nameCheck.js";
 import type { Issue, Story } from "./types.js";
 
 export type ChecklistItem = {
@@ -17,6 +18,8 @@ export function buildEditorialChecklist(
   issue: Issue,
   stories: Story[]
 ): EditorialChecklist {
+  const nameGate = checkIssueNames(issue, stories);
+
   const items: ChecklistItem[] = [
     {
       id: "subject",
@@ -46,10 +49,18 @@ export function buildEditorialChecklist(
     },
     {
       id: "grounding",
-      label: "Stories have source grounding notes",
+      label: "Every story has transcript grounding",
       pass:
         stories.length > 0 && stories.every((s) => Boolean(s.source_notes?.trim())),
-      required: false,
+      required: true,
+    },
+    {
+      id: "names",
+      label: nameGate.ok
+        ? "Person names match transcript grounding"
+        : `Person names match transcript (${nameGate.ungrounded.length} unsupported)`,
+      pass: stories.length > 0 && nameGate.ok,
+      required: true,
     },
     {
       id: "weather",
@@ -71,8 +82,8 @@ export function buildEditorialChecklist(
     },
     {
       id: "fact_review",
-      label: "AI fact-check run (transcripts + web)",
-      pass: Boolean(issue.fact_reviewed_at),
+      label: "AI fact-check run (transcripts + web + names)",
+      pass: Boolean(issue.fact_reviewed_at) && nameGate.ok,
       required: true,
     },
   ];

@@ -342,6 +342,110 @@ export async function getNewestDraftSources(
   return (await getNewestUnusedFindingsAsSources(databaseUrl, limit)).slice(0, limit);
 }
 
+/** Load specific source rows by id, including already-used ones (for accept/reground). */
+export async function getDraftSourcesByRefs(
+  databaseUrl: string,
+  refs: Array<{ id: string; sourceTable: string; kind?: string }>
+): Promise<DraftSource[]> {
+  const out: DraftSource[] = [];
+  for (const ref of refs) {
+    if (!isSafeIdent(ref.sourceTable)) continue;
+    if (!(await tableExists(databaseUrl, ref.sourceTable))) continue;
+
+    if (ref.sourceTable === "findings" || ref.kind === "finding") {
+      const columns = await getTableColumns(databaseUrl, "findings");
+      const bodyCol = pickColumn(columns, ["body", "content", "summary", "text", "notes"]);
+      const idCol = pickColumn(columns, ID_CANDIDATES);
+      if (!bodyCol || !idCol) continue;
+      const titleCol = pickColumn(columns, TITLE_CANDIDATES);
+      const urlCol = pickColumn(columns, ["source_url", "url"]);
+      const categoryCol = pickColumn(columns, ["category", "source", "label"]);
+      const timeCol = pickColumn(columns, ["found_at", "created_at", "updated_at"]);
+      const { rows } = await getPool(databaseUrl).query<{
+        id: string;
+        title: string;
+        body: string;
+        source_url: string;
+        category: string;
+        found_at: string | null;
+      }>(
+        `SELECT ${idCol}::text AS id,
+                ${bodyCol}::text AS body,
+                ${titleCol ? `${titleCol}::text` : `''::text`} AS title,
+                ${urlCol ? `${urlCol}::text` : `''::text`} AS source_url,
+                ${categoryCol ? `${categoryCol}::text` : `''::text`} AS category,
+                ${timeCol ? `${timeCol}::text` : `NULL::text`} AS found_at
+         FROM findings
+         WHERE ${idCol}::text = $1
+         LIMIT 1`,
+        [ref.id]
+      );
+      const row = rows[0];
+      if (!row?.body?.trim()) continue;
+      out.push({
+        kind: "finding",
+        id: row.id,
+        sourceTable: "findings",
+        title: row.title || "",
+        content: row.body,
+        meta: row.category || "",
+        occurredAt: row.found_at,
+        url: row.source_url || "",
+        category: row.category || "Local",
+      });
+      continue;
+    }
+
+    const columns = await getTableColumns(databaseUrl, ref.sourceTable);
+    const shape = resolveTranscriptShape(columns);
+    if (!shape) continue;
+    const selectParts = [
+      `${shape.idCol}::text AS id`,
+      `${shape.contentCol}::text AS content`,
+      shape.titleCol ? `${shape.titleCol}::text AS title` : `''::text AS title`,
+      shape.sourceCol ? `${shape.sourceCol}::text AS source` : `''::text AS source`,
+      shape.speakerCol ? `${shape.speakerCol}::text AS speaker` : `''::text AS speaker`,
+      shape.timeCol ? `${shape.timeCol}::text AS occurred_at` : `NULL::text AS occurred_at`,
+    ];
+    try {
+      const { rows } = await getPool(databaseUrl).query<{
+        id: string;
+        content: string;
+        title: string;
+        source: string;
+        speaker: string;
+        occurred_at: string | null;
+      }>(
+        `SELECT ${selectParts.join(", ")}
+         FROM ${ref.sourceTable}
+         WHERE ${shape.idCol}::text = $1
+         LIMIT 1`,
+        [ref.id]
+      );
+      const row = rows[0];
+      if (!row?.content?.trim()) continue;
+      out.push({
+        kind:
+          ref.sourceTable === "transcripts" ? "transcript" : "external_transcript",
+        id: row.id,
+        sourceTable: ref.sourceTable,
+        title: row.title || "",
+        content: row.content,
+        meta: [row.speaker && `Speaker: ${row.speaker}`, row.source && `Source: ${row.source}`]
+          .filter(Boolean)
+          .join(" · "),
+        occurredAt: row.occurred_at,
+        url: row.source?.startsWith("http") ? row.source : "",
+        category: row.source || "Transcript",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`getDraftSourcesByRefs skipped ${ref.sourceTable}:${ref.id}: ${message}`);
+    }
+  }
+  return out;
+}
+
 export async function markDraftSourcesUsed(
   databaseUrl: string,
   sources: DraftSource[],

@@ -3,6 +3,7 @@ import {
   factReviewIssue,
   generateIssueCopy,
   type FactReviewResult,
+  type GeneratedIssueCopy,
 } from "./claude.js";
 import type { AppConfig } from "./config.js";
 import {
@@ -12,6 +13,10 @@ import {
   upsertStory,
 } from "./db.js";
 import { fetchMarineConditions } from "./marine.js";
+import {
+  checkIssueNames,
+  scrubUngroundedNames,
+} from "./nameCheck.js";
 import type { Issue, Story } from "./types.js";
 
 export interface GenerateResult {
@@ -25,7 +30,74 @@ export type FactReviewSaveResult = FactReviewResult & {
   issue: Issue;
   stories: Story[];
   model: typeof CLAUDE_MODEL;
+  name_gate_ok: boolean;
 };
+
+function issueCopyFrom(issue: Issue, stories: Story[]): GeneratedIssueCopy {
+  return {
+    subject: issue.subject,
+    preheader: issue.preheader,
+    intro: issue.intro,
+    coming_up: issue.coming_up ?? [],
+    stories: stories.map((story) => ({
+      position: story.position,
+      toc_title: story.toc_title,
+      title: story.title,
+      eyebrow: story.eyebrow,
+      summary: story.summary,
+      why_it_matters: story.why_it_matters,
+      quote: story.quote,
+      quote_attribution: story.quote_attribution,
+    })),
+  };
+}
+
+async function saveIssueCopy(
+  databaseUrl: string,
+  issueId: string,
+  stories: Story[],
+  copy: GeneratedIssueCopy,
+  factReviewedAt: string | null
+): Promise<{ issue: Issue; stories: Story[] }> {
+  const updatedIssue = await updateIssue(databaseUrl, issueId, {
+    subject: copy.subject,
+    preheader: copy.preheader,
+    intro: copy.intro,
+    coming_up: copy.coming_up,
+    fact_reviewed_at: factReviewedAt,
+  });
+  if (!updatedIssue) {
+    throw new Error("Failed to save issue copy");
+  }
+
+  const savedStories: Story[] = [];
+  for (const story of stories) {
+    const next = copy.stories.find((item) => item.position === story.position);
+    if (!next) continue;
+    savedStories.push(
+      await upsertStory(databaseUrl, issueId, {
+        id: story.id,
+        position: story.position,
+        toc_title: next.toc_title || story.toc_title,
+        title: next.title || story.title,
+        eyebrow: next.eyebrow,
+        summary: next.summary,
+        why_it_matters: next.why_it_matters,
+        url: story.url,
+        image_url: story.image_url,
+        quote: next.quote,
+        quote_attribution: next.quote_attribution,
+        source_notes: story.source_notes,
+        finding_id: story.finding_id,
+      })
+    );
+  }
+
+  return {
+    issue: updatedIssue,
+    stories: savedStories.sort((a, b) => a.position - b.position),
+  };
+}
 
 export async function generateAndSaveIssue(
   config: AppConfig,
@@ -109,8 +181,8 @@ export async function generateAndSaveIssue(
 }
 
 /**
- * AI fact-check draft against transcript source notes.
- * When apply=true (default if errors + corrections exist), saves the corrected copy.
+ * AI fact-check draft against transcript source notes + deterministic name gate.
+ * Stamps fact_reviewed_at only when names pass after any applied corrections.
  */
 export async function factReviewAndMaybeApply(
   config: AppConfig,
@@ -142,63 +214,132 @@ export async function factReviewAndMaybeApply(
     options?.apply === true ||
     (options?.apply !== false && Boolean(review.corrected) && !review.ok);
 
-  if (!shouldApply || !review.corrected) {
-    const stamped =
-      review.ok
-        ? await updateIssue(config.databaseUrl, issueId, {
-            fact_reviewed_at: new Date().toISOString(),
-          })
-        : issue;
-    return {
-      ...review,
-      applied: false,
-      issue: stamped ?? issue,
-      stories,
-      model: CLAUDE_MODEL,
-    };
-  }
+  let workingIssue = issue;
+  let workingStories = stories;
+  let applied = false;
+  let findings = [...review.findings];
+  let summary = review.summary;
 
-  const corrected = review.corrected;
-  const updatedIssue = await updateIssue(config.databaseUrl, issueId, {
-    subject: corrected.subject,
-    preheader: corrected.preheader,
-    intro: corrected.intro,
-    coming_up: corrected.coming_up,
-    fact_reviewed_at: new Date().toISOString(),
-  });
-  if (!updatedIssue) {
-    throw new Error("Failed to save fact-check corrections");
-  }
-
-  const savedStories: Story[] = [];
-  for (const story of stories) {
-    const copy = corrected.stories.find((item) => item.position === story.position);
-    if (!copy) continue;
-    savedStories.push(
-      await upsertStory(config.databaseUrl, issueId, {
-        id: story.id,
-        position: story.position,
-        toc_title: copy.toc_title || story.toc_title,
-        title: copy.title || story.title,
-        eyebrow: copy.eyebrow,
-        summary: copy.summary,
-        why_it_matters: copy.why_it_matters,
-        url: story.url,
-        image_url: story.image_url,
-        quote: copy.quote,
-        quote_attribution: copy.quote_attribution,
-        source_notes: story.source_notes,
-        finding_id: story.finding_id,
+  if (shouldApply) {
+    let copy =
+      review.corrected ?? issueCopyFrom(workingIssue, workingStories);
+    const preSaveNames = checkIssueNames(
+      {
+        ...workingIssue,
+        subject: copy.subject,
+        preheader: copy.preheader,
+        intro: copy.intro,
+        coming_up: copy.coming_up,
+      },
+      workingStories.map((story) => {
+        const next = copy.stories.find((s) => s.position === story.position);
+        return next
+          ? {
+              ...story,
+              toc_title: next.toc_title || story.toc_title,
+              title: next.title || story.title,
+              eyebrow: next.eyebrow,
+              summary: next.summary,
+              why_it_matters: next.why_it_matters,
+              quote: next.quote,
+              quote_attribution: next.quote_attribution,
+            }
+          : story;
       })
     );
+
+    if (!preSaveNames.ok) {
+      copy = scrubUngroundedNames(copy, preSaveNames.ungrounded);
+      findings = [
+        ...findings,
+        ...preSaveNames.findings.map((f) => ({
+          ...f,
+          suggestion: `${f.suggestion} (auto-removed unsupported name from copy)`,
+        })),
+      ];
+      summary = `${summary} Ungrounded names were stripped before save.`.trim();
+    }
+
+    const saved = await saveIssueCopy(
+      config.databaseUrl,
+      issueId,
+      workingStories,
+      copy,
+      null
+    );
+    workingIssue = saved.issue;
+    workingStories = saved.stories;
+    applied = true;
+  }
+
+  const finalNames = checkIssueNames(workingIssue, workingStories);
+  if (!finalNames.ok) {
+    // Last-resort scrub on whatever is currently saved.
+    const scrubbed = scrubUngroundedNames(
+      issueCopyFrom(workingIssue, workingStories),
+      finalNames.ungrounded
+    );
+    const saved = await saveIssueCopy(
+      config.databaseUrl,
+      issueId,
+      workingStories,
+      scrubbed,
+      null
+    );
+    workingIssue = saved.issue;
+    workingStories = saved.stories;
+    applied = true;
+    findings = [...findings, ...finalNames.findings];
+    summary = `${summary} Name gate still found unsupported names; they were stripped.`.trim();
+  }
+
+  const nameGate = checkIssueNames(workingIssue, workingStories);
+  // Stamp only when every person-like name is grounded. After apply/scrub, trust
+  // the corrected copy for non-name LLM findings; otherwise require review.ok.
+  const reviewOk = nameGate.ok && (applied || review.ok);
+
+  if (reviewOk) {
+    const stamped = await updateIssue(config.databaseUrl, issueId, {
+      fact_reviewed_at: new Date().toISOString(),
+    });
+    workingIssue = stamped ?? workingIssue;
+  } else if (workingIssue.fact_reviewed_at) {
+    const cleared = await updateIssue(config.databaseUrl, issueId, {
+      fact_reviewed_at: null,
+    });
+    workingIssue = cleared ?? workingIssue;
+  }
+
+  // Prefer surfacing any remaining name findings.
+  if (!nameGate.ok) {
+    for (const finding of nameGate.findings) {
+      if (
+        !findings.some(
+          (f) =>
+            f.issue === finding.issue &&
+            f.story_position === finding.story_position &&
+            f.field === finding.field
+        )
+      ) {
+        findings.push(finding);
+      }
+    }
   }
 
   return {
-    ...review,
-    applied: true,
-    issue: updatedIssue,
-    stories: savedStories.sort((a, b) => a.position - b.position),
+    ok: reviewOk,
+    summary:
+      summary ||
+      (reviewOk
+        ? "Fact-check passed (transcripts, web, and name gate)."
+        : "Fact-check incomplete — fix remaining errors before scheduling."),
+    findings,
+    corrected: review.corrected,
+    applied,
+    issue: workingIssue,
+    stories: workingStories,
     model: CLAUDE_MODEL,
+    name_gate_ok: nameGate.ok,
   };
 }
 

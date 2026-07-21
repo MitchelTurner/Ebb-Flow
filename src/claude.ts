@@ -1,7 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { RecentStoryRef } from "./dedup.js";
+import {
+  buildStoryGroundingNotes,
+  checkIssueNames,
+} from "./nameCheck.js";
 import type { DraftSource } from "./sources.js";
-import { sourceToNotes } from "./sources.js";
 import type {
   FactReviewFinding,
   Issue,
@@ -47,7 +50,9 @@ Your job is to REFINE raw meeting/interview transcripts into a small set of dige
 
 Accuracy rules (critical):
 - Copy names, titles, vote counts, dollar amounts, dates, and places EXACTLY as they appear in the source transcript/notes.
-- Never invent or "correct" a person's name. If unsure, use a role ("the harbor master") or omit the name.
+- Never invent or "correct" a person's name — not even from memory or "common knowledge."
+- If a person's name is unclear, incomplete, or only partly audible, use a role ("the harbor master", "a council member") or omit the name.
+- Never swap in a different spelling you think is "more correct." Transcript spelling wins.
 - Never invent quotes. If the exact words are not in the source, set quote to null.`;
 
 const REVIEW_SYSTEM = `You are a meticulous fact-checker for "The Ebb & Flow", a local newsletter for Ketchikan / Tongass Narrows, Alaska.
@@ -55,12 +60,12 @@ const REVIEW_SYSTEM = `You are a meticulous fact-checker for "The Ebb & Flow", a
 You MUST use the web_search tool to verify checkable claims against public internet sources
 (city/borough sites, Alaska news outlets, official agendas/minutes, NOAA, etc.).
 
-Check both:
-1) Draft copy vs transcript/source_notes (names, quotes, votes must appear in the transcript).
-2) Transcript and draft claims vs the public web (correct spelling of officials, real orgs, meeting outcomes, dates).
+Priority order (must follow):
+1) Draft copy vs transcript/source_notes — names, quotes, and vote counts MUST appear in the transcript text.
+2) Public web — use for roles, orgs, meeting outcomes, and dates. Web may WARN about spelling, but must NOT replace a person name with a web spelling that is absent from the transcript.
 
-If the web contradicts the transcript, flag it as a warning and prefer careful wording over inventing a "corrected" fact.
-If a name/detail is unsupported by both transcript and web, treat it as an error and remove it in corrections.
+If the web contradicts the transcript on a person's name, keep the transcript form or omit the name / use a role. Never invent a hybrid spelling.
+If a name/detail is unsupported by the transcript, treat it as an error and remove it in corrections (prefer role/omit over a web-only name).
 Do not invent new news. Prefer omitting unsupported details over guessing.
 No emojis. After searching, return JSON only as your final answer.`;
 
@@ -252,8 +257,9 @@ Rules:
 - Propose ${Math.min(3, maxTopics)}-${maxTopics} topics (not one per transcript).
 - Split long transcripts; merge related scraps.
 - Drop procedural filler and near-duplicates of recent topics.
-- Keep facts faithful; no invented quotes.
-- Every topic needs source_notes grounding.`;
+- Keep facts faithful; no invented quotes or names.
+- Copy person names EXACTLY as spoken/spelled in the transcript, or use a role / omit.
+- Every topic needs source_notes grounding (which source + key facts, with names spelled as in the transcript).`;
 
   const parsed = (await callClaudeJson({
     apiKey: params.apiKey,
@@ -346,7 +352,7 @@ Return ONLY valid JSON matching this shape:
       "why_it_matters": "one short sentence",
       "quote": "optional quote text without surrounding quotation marks, or null",
       "quote_attribution": "optional attribution without leading em dash, or null",
-      "source_notes": "2-5 bullet-like lines: which source(s) this topic came from + the key facts you used"
+      "source_notes": "2-5 bullet-like lines: which source index/title this topic came from + key facts (spell names exactly as in the transcript)"
     }
   ]
 }
@@ -359,6 +365,7 @@ Topic refinement rules:
 - Skip near-duplicates of recent newsletter topics.
 - Position 1 is the lead — the strongest news for neighbors this week.
 - Keep facts faithful; do not invent votes, names, dates, or quotes.
+- Person names must be copied character-for-character from the transcript. If unsure, use a role or omit — never "fix" a name.
 - If a quote is not clearly present, set quote and quote_attribution to null.
 - coming_up should be 2-4 short teasers from unfinished threads in the transcripts.
 - Every story must include source_notes grounding the topic.`;
@@ -417,6 +424,7 @@ Rules:
 - Include every input story position in the output (same positions).
 - Position 1 is the lead story and should be the strongest news.
 - Keep facts faithful; do not invent votes, names, dates, or quotes.
+- Person names must appear in that story's source_notes / TRANSCRIPT text exactly. Never invent or autocorrect a name.
 - If a quote is not clearly present, set quote and quote_attribution to null.
 - coming_up should be 2-4 short teaser bullets from unfinished threads.`;
 
@@ -455,7 +463,6 @@ function normalizeTopics(
     throw new Error("Invalid Claude JSON");
   }
 
-  const fallbackNotes = sources.map((s) => sourceToNotes(s)).join("\n\n---\n\n");
   const rawStories = Array.isArray(parsed.stories) ? parsed.stories : [];
   const stories: GeneratedStoryCopy[] = [];
 
@@ -464,9 +471,11 @@ function normalizeTopics(
     const position = stories.length + 1;
     const normalized = normalizeStory(story, position);
     if (!normalized.title) continue;
-    if (!normalized.source_notes) {
-      normalized.source_notes = fallbackNotes.slice(0, 8_000);
-    }
+    // Always keep raw transcript text on the story so name gates can verify.
+    normalized.source_notes = buildStoryGroundingNotes(
+      normalized.source_notes,
+      sources
+    );
     stories.push(normalized);
   }
 
@@ -536,17 +545,29 @@ export async function factReviewIssue(params: {
     throw new Error("Add stories before running AI fact-check.");
   }
 
-  const hasGrounding = params.stories.some((s) => s.source_notes?.trim());
-  if (!hasGrounding) {
+  const missingGrounding = params.stories.filter((s) => !s.source_notes?.trim());
+  if (missingGrounding.length) {
     throw new Error(
-      "Stories need source notes (transcript grounding) for AI fact-check."
+      `Every story needs transcript grounding notes before AI fact-check (missing on position ${missingGrounding
+        .map((s) => s.position)
+        .join(", ")}).`
     );
   }
 
+  const nameGate = checkIssueNames(params.issue, params.stories);
+  const nameGateBlock = nameGate.ok
+    ? ""
+    : `
+DETERMINISTIC NAME GATE (must fix — these draft names do NOT appear in transcript grounding):
+${JSON.stringify(nameGate.ungrounded, null, 2)}
+For each, omit the name or use a role from the transcript. Do NOT substitute a web-only spelling.
+`;
+
   const userPrompt = `Fact-check this Ketchikan / Tongass Narrows newsletter draft.
 
-You MUST use web_search for checkable names, titles, organizations, meeting outcomes, votes, dates, and places mentioned in the draft or in source_notes/transcripts.
-
+You MUST use web_search for checkable titles, organizations, meeting outcomes, votes, dates, and places.
+For PERSON NAMES: transcript grounding wins. Web may warn, but must not introduce a replacement spelling absent from the transcript.
+${nameGateBlock}
 Draft issue:
 ${JSON.stringify(
   {
@@ -560,11 +581,11 @@ ${JSON.stringify(
   2
 )}
 
-Stories (source_notes contain transcript excerpts):
+Stories (source_notes include TOPIC SUMMARY + full TRANSCRIPT / SOURCE TEXT):
 ${JSON.stringify(params.stories.map(storyInput), null, 2)}
 
 Search examples to run (adapt to the actual claims):
-- "[person name] Ketchikan" or "[role] Ketchikan"
+- "[role] Ketchikan" or org/meeting topic queries
 - "Ketchikan [meeting/board] [topic] [year]"
 - official city/borough/harbor/library pages when relevant
 
@@ -604,13 +625,13 @@ Return ONLY valid JSON as your final answer (after searches):
 }
 
 Rules:
-- Verify draft details against transcripts first (quotes/names must appear in source_notes).
-- Also verify checkable claims on the public web; include source_url when a web page supports or contradicts a claim.
-- If web and transcript disagree, severity "warning" and suggest cautious wording — do not invent a new "corrected" name from thin air.
-- If unsupported by transcript and unverified/contradicted online, severity "error" and remove/soften in corrected copy.
+- Verify draft details against transcripts first (quotes/names must appear in source_notes TRANSCRIPT text).
+- Also verify checkable non-name claims on the public web; include source_url when a web page supports or contradicts a claim.
+- If web and transcript disagree on a PERSON NAME: severity "warning" for the discrepancy, and in corrected copy keep transcript spelling OR omit/use a role — never write a web-only name.
+- If a name is unsupported by the transcript, severity "error" and remove/soften in corrected copy.
 - Focus on names, titles/roles, orgs, votes, numbers, dates, places, and quotes.
 - If ok is true and there are no errors, set corrected to null.
-- If there are any errors, corrected MUST include every story position with fixes applied.
+- If there are any errors (including name-gate items), corrected MUST include every story position with fixes applied.
 - Keep the newsletter voice. Do not add new news from the web that was not in the transcript.`;
 
   const parsed = (await callClaudeJsonWithWebSearch({
@@ -626,7 +647,7 @@ Rules:
     corrected?: GeneratedIssueCopy | null;
   };
 
-  const findings: FactReviewFinding[] = Array.isArray(parsed.findings)
+  const llmFindings: FactReviewFinding[] = Array.isArray(parsed.findings)
     ? parsed.findings.map((f) => ({
         severity: f.severity === "warning" ? "warning" : "error",
         field: String(f.field ?? "other"),
@@ -641,6 +662,8 @@ Rules:
       }))
     : [];
 
+  // Deterministic name findings always win — LLM cannot clear them by omission.
+  const findings = [...nameGate.findings, ...llmFindings];
   const hasErrors = findings.some((f) => f.severity === "error");
   let corrected: GeneratedIssueCopy | null = null;
   if (parsed.corrected && typeof parsed.corrected === "object") {
@@ -651,7 +674,7 @@ Rules:
     }
   }
 
-  const ok = Boolean(parsed.ok) && !hasErrors;
+  const ok = Boolean(parsed.ok) && !hasErrors && nameGate.ok;
 
   return {
     ok,
@@ -659,7 +682,9 @@ Rules:
       String(parsed.summary ?? "").trim() ||
       (ok
         ? "No factual errors found against transcripts and web sources."
-        : "Fact-check found issues that need correction."),
+        : nameGate.ok
+          ? "Fact-check found issues that need correction."
+          : `Name gate failed: ${nameGate.ungrounded.length} name(s) not found in transcript grounding.`),
     findings,
     corrected: ok ? null : corrected,
   };

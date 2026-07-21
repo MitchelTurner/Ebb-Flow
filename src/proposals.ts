@@ -9,6 +9,7 @@ import { createIssue, getPool, updateIssue, upsertStory } from "./db.js";
 import type { GenerateResult } from "./generate.js";
 import { fetchMarineConditions } from "./marine.js";
 import {
+  getDraftSourcesByRefs,
   getNewestDraftSources,
   markDraftSourcesUsed,
   type DraftSource,
@@ -181,6 +182,10 @@ async function reloadSources(
   databaseUrl: string,
   refs: ProposalSourceRef[]
 ): Promise<DraftSource[]> {
+  // Prefer exact rows (including already-used) so name grounding keeps full transcripts.
+  const byId = await getDraftSourcesByRefs(databaseUrl, refs);
+  if (byId.length) return byId;
+
   const all = await getNewestDraftSources(databaseUrl, 100);
   const byKey = new Map(all.map((s) => [`${s.sourceTable}:${s.id}`, s]));
   const out: DraftSource[] = [];
@@ -188,7 +193,6 @@ async function reloadSources(
     const hit = byKey.get(`${ref.sourceTable}:${ref.id}`);
     if (hit) out.push(hit);
   }
-  // If sources were already used or filtered out, still allow accept from notes.
   return out.length ? out : all.slice(0, refs.length || 6);
 }
 

@@ -254,6 +254,22 @@ export function createApiRouter(config: AppConfig): Router {
       if (payload.coming_up !== undefined) {
         payload.coming_up = normalizeComingUp(payload.coming_up);
       }
+      // Editing newsletter copy invalidates the prior fact-check stamp.
+      const copyKeys = [
+        "subject",
+        "preheader",
+        "intro",
+        "coming_up",
+        "volume_label",
+        "tip_headline",
+        "tip_body",
+      ];
+      if (
+        payload.fact_reviewed_at === undefined &&
+        copyKeys.some((key) => Object.prototype.hasOwnProperty.call(payload, key))
+      ) {
+        payload.fact_reviewed_at = null;
+      }
       const issue = await updateIssue(config.databaseUrl, req.params.id, payload);
       if (!issue) {
         res.status(404).json({ error: "Issue not found" });
@@ -318,6 +334,11 @@ export function createApiRouter(config: AppConfig): Router {
           : null,
         source_notes: sourceNotes,
         finding_id: body.finding_id ? String(body.finding_id) : null,
+      });
+
+      // Story edits can change names/quotes — require a fresh fact-check.
+      await updateIssue(config.databaseUrl, req.params.id, {
+        fact_reviewed_at: null,
       });
 
       let generated = null;
@@ -392,6 +413,22 @@ export function createApiRouter(config: AppConfig): Router {
   router.post("/admin/issues/:id/send", guard, async (req, res) => {
     try {
       const dryRun = Boolean(req.body?.dry_run);
+      const current = await getIssueForSend(config.databaseUrl, req.params.id);
+      if (!current) {
+        res.status(404).json({ ok: false, error: "Issue not found" });
+        return;
+      }
+      const stories = await getStories(config.databaseUrl, current.id);
+      const checklist = buildEditorialChecklist(current, stories);
+      if (!dryRun && !checklist.ok && !req.body?.force) {
+        res.status(400).json({
+          ok: false,
+          error:
+            "Editorial checklist incomplete (including name grounding). Fix items or pass force=true.",
+          checklist,
+        });
+        return;
+      }
       // Immediate send: clear future schedule so due-check passes.
       if (!dryRun) {
         await updateIssue(config.databaseUrl, req.params.id, {
@@ -404,7 +441,7 @@ export function createApiRouter(config: AppConfig): Router {
         issueId: req.params.id,
         dryRun: dryRun || config.dryRun,
       });
-      res.json({ ok: true, result });
+      res.json({ ok: true, result, checklist });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ ok: false, error: message });
