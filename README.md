@@ -105,8 +105,9 @@ If you ever see `relation "subscribers" does not exist`, redeploy the web servic
 1. Add **Transcripts** in Admin → Transcripts (or insert into `transcripts`). Findings are a fallback.
 2. Click **Propose topics** — Claude suggests digestible topics (deduped vs recent issues) with source grounding; weather/tides are autofilled for review.
 3. Select topics → **Write selected topics** to create the draft issue. Or use **Quick draft** to skip the review step.
-4. Check the **editorial checklist**, use **Email me a preview**, then **Approve & schedule**.
-5. Cron `POST /cron/send` delivers due `ready` issues.
+4. Run **AI fact-check** on the draft (verifies names/details against transcript notes and can auto-correct).
+5. Check the **editorial checklist**, use **Email me a preview**, then **Approve & schedule**.
+6. Cron `POST /cron/send` delivers due `ready` issues.
 
 Draft source priority: `transcripts` → `%transcript%` / `%recording%` tables → `findings`.
 

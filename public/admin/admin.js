@@ -544,6 +544,7 @@ function blankIssue() {
     tip_body: "Just hit reply — every message reaches the newsroom directly.",
     postal_address: "",
     status: "draft",
+    fact_reviewed_at: null,
   };
 }
 
@@ -927,9 +928,14 @@ document.getElementById("generate-claude-btn")?.addEventListener("click", async 
       body: "{}",
     });
     fillIssueForm(result.issue);
+    const panel = document.getElementById("fact-review-panel");
+    if (panel) {
+      panel.innerHTML =
+        `<p class="muted">Draft rewritten — run <strong>AI fact-check</strong> before scheduling.</p>`;
+    }
     flash(
       appFlash,
-      `Claude draft saved (${result.model}). Review before sending.`,
+      `Claude draft saved (${result.model}). Run AI fact-check next.`,
       "ok"
     );
     await loadIssues();
@@ -938,6 +944,91 @@ document.getElementById("generate-claude-btn")?.addEventListener("click", async 
     flash(appFlash, err.message, "err");
   } finally {
     if (btn instanceof HTMLButtonElement) btn.disabled = false;
+  }
+});
+
+function renderFactReview(result) {
+  const panel = document.getElementById("fact-review-panel");
+  if (!panel) return;
+  const findings = result.findings || [];
+  const findingHtml = findings.length
+    ? findings
+        .map(
+          (f) => `<div class="finding ${escapeHtml(f.severity)}">
+            <strong>${escapeHtml(f.severity)}</strong>
+            ${f.story_position != null ? ` · story ${f.story_position}` : ""}
+            · ${escapeHtml(f.field)}<br>
+            ${escapeHtml(f.issue)}<br>
+            <span class="muted">Evidence: ${escapeHtml(f.evidence || "—")}</span><br>
+            <span class="muted">Fix: ${escapeHtml(f.suggestion || "—")}</span>
+          </div>`
+        )
+        .join("")
+    : `<p class="pass">No name/detail issues flagged.</p>`;
+
+  panel.innerHTML = `<h4>AI fact-check</h4>
+    <p>${escapeHtml(result.summary || "")}${
+      result.applied ? " Corrections were applied to the draft." : ""
+    }</p>
+    ${findingHtml}
+    ${
+      !result.ok && result.corrected && !result.applied
+        ? `<div class="row-actions" style="margin-top:0.75rem">
+            <button type="button" id="fact-review-apply-btn">Apply corrections</button>
+          </div>`
+        : ""
+    }`;
+}
+
+document.getElementById("fact-review-btn")?.addEventListener("click", async () => {
+  if (!selectedIssueId) {
+    flash(appFlash, "Save or open an issue first.", "err");
+    return;
+  }
+  const btn = document.getElementById("fact-review-btn");
+  if (btn instanceof HTMLButtonElement) btn.disabled = true;
+  flash(appFlash, "Fact-checking names and details against transcripts…", "");
+  try {
+    const result = await api(`/api/admin/issues/${selectedIssueId}/fact-review`, {
+      method: "POST",
+      body: JSON.stringify({ apply: true }),
+    });
+    renderFactReview(result);
+    fillIssueForm(result.issue);
+    await loadStories(selectedIssueId);
+    await loadIssues();
+    flash(
+      appFlash,
+      result.ok
+        ? "Fact-check passed."
+        : result.applied
+          ? `Fact-check fixed ${result.findings.filter((f) => f.severity === "error").length} error(s).`
+          : "Fact-check found issues.",
+      result.ok ? "ok" : "err"
+    );
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  } finally {
+    if (btn instanceof HTMLButtonElement) btn.disabled = false;
+  }
+});
+
+document.getElementById("fact-review-panel")?.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || target.id !== "fact-review-apply-btn") return;
+  if (!selectedIssueId) return;
+  flash(appFlash, "Applying fact-check corrections…", "");
+  try {
+    const result = await api(`/api/admin/issues/${selectedIssueId}/fact-review`, {
+      method: "POST",
+      body: JSON.stringify({ apply: true }),
+    });
+    renderFactReview(result);
+    fillIssueForm(result.issue);
+    await loadStories(selectedIssueId);
+    flash(appFlash, "Corrections applied.", "ok");
+  } catch (err) {
+    flash(appFlash, err.message, "err");
   }
 });
 

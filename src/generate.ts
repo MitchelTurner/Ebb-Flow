@@ -1,4 +1,9 @@
-import { CLAUDE_MODEL, generateIssueCopy } from "./claude.js";
+import {
+  CLAUDE_MODEL,
+  factReviewIssue,
+  generateIssueCopy,
+  type FactReviewResult,
+} from "./claude.js";
 import type { AppConfig } from "./config.js";
 import {
   getIssueForSend,
@@ -14,6 +19,13 @@ export interface GenerateResult {
   stories: Story[];
   model: typeof CLAUDE_MODEL;
 }
+
+export type FactReviewSaveResult = FactReviewResult & {
+  applied: boolean;
+  issue: Issue;
+  stories: Story[];
+  model: typeof CLAUDE_MODEL;
+};
 
 export async function generateAndSaveIssue(
   config: AppConfig,
@@ -60,6 +72,7 @@ export async function generateAndSaveIssue(
     preheader: generated.preheader,
     intro: generated.intro,
     coming_up: generated.coming_up,
+    fact_reviewed_at: null,
     ...marinePatch,
   });
   if (!updatedIssue) {
@@ -89,6 +102,100 @@ export async function generateAndSaveIssue(
   }
 
   return {
+    issue: updatedIssue,
+    stories: savedStories.sort((a, b) => a.position - b.position),
+    model: CLAUDE_MODEL,
+  };
+}
+
+/**
+ * AI fact-check draft against transcript source notes.
+ * When apply=true (default if errors + corrections exist), saves the corrected copy.
+ */
+export async function factReviewAndMaybeApply(
+  config: AppConfig,
+  issueId: string,
+  options?: { apply?: boolean }
+): Promise<FactReviewSaveResult> {
+  if (!config.anthropicApiKey) {
+    throw new Error(
+      "Claude API key is not set. Add AI_KEY on the Railway web service, then redeploy."
+    );
+  }
+
+  const issue = await getIssueForSend(config.databaseUrl, issueId);
+  if (!issue) {
+    throw new Error(`Issue not found: ${issueId}`);
+  }
+  const stories = await getStories(config.databaseUrl, issueId);
+  if (!stories.length) {
+    throw new Error("Add stories before running AI fact-check.");
+  }
+
+  const review = await factReviewIssue({
+    apiKey: config.anthropicApiKey,
+    issue,
+    stories,
+  });
+
+  const shouldApply =
+    options?.apply === true ||
+    (options?.apply !== false && Boolean(review.corrected) && !review.ok);
+
+  if (!shouldApply || !review.corrected) {
+    const stamped =
+      review.ok
+        ? await updateIssue(config.databaseUrl, issueId, {
+            fact_reviewed_at: new Date().toISOString(),
+          })
+        : issue;
+    return {
+      ...review,
+      applied: false,
+      issue: stamped ?? issue,
+      stories,
+      model: CLAUDE_MODEL,
+    };
+  }
+
+  const corrected = review.corrected;
+  const updatedIssue = await updateIssue(config.databaseUrl, issueId, {
+    subject: corrected.subject,
+    preheader: corrected.preheader,
+    intro: corrected.intro,
+    coming_up: corrected.coming_up,
+    fact_reviewed_at: new Date().toISOString(),
+  });
+  if (!updatedIssue) {
+    throw new Error("Failed to save fact-check corrections");
+  }
+
+  const savedStories: Story[] = [];
+  for (const story of stories) {
+    const copy = corrected.stories.find((item) => item.position === story.position);
+    if (!copy) continue;
+    savedStories.push(
+      await upsertStory(config.databaseUrl, issueId, {
+        id: story.id,
+        position: story.position,
+        toc_title: copy.toc_title || story.toc_title,
+        title: copy.title || story.title,
+        eyebrow: copy.eyebrow,
+        summary: copy.summary,
+        why_it_matters: copy.why_it_matters,
+        url: story.url,
+        image_url: story.image_url,
+        quote: copy.quote,
+        quote_attribution: copy.quote_attribution,
+        source_notes: story.source_notes,
+        finding_id: story.finding_id,
+      })
+    );
+  }
+
+  return {
+    ...review,
+    applied: true,
     issue: updatedIssue,
     stories: savedStories.sort((a, b) => a.position - b.position),
     model: CLAUDE_MODEL,

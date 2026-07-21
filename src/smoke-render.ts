@@ -36,6 +36,7 @@ const issue: Issue = {
   postal_address: "123 Main Street",
   status: "ready",
   scheduled_for: null,
+  fact_reviewed_at: null,
 };
 
 const stories: Story[] = [1, 2, 3, 4, 5, 6].map((position) => ({

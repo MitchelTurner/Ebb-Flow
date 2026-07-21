@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS issues (
 
 -- Existing DBs may predate scheduled_for.
 ALTER TABLE issues ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS fact_reviewed_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS stories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

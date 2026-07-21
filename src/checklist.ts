@@ -69,6 +69,12 @@ export function buildEditorialChecklist(
       pass: Boolean(issue.high_tide_label?.trim()),
       required: true,
     },
+    {
+      id: "fact_review",
+      label: "AI fact-check run against transcripts",
+      pass: Boolean(issue.fact_reviewed_at),
+      required: true,
+    },
   ];
 
   return {
