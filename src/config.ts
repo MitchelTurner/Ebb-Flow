@@ -71,8 +71,16 @@ export function getConfig() {
     anthropicModel: "claude-fable-5" as const,
     /** When true, saving a story with source_notes triggers Claude rewrite of that issue. */
     anthropicAutoWrite: bool("ANTHROPIC_AUTO_WRITE", false),
-    /** On web boot / cron, draft a new issue from newest unused transcripts. */
+    /**
+     * Enable auto-draft from transcripts (admin / cron / optional boot).
+     * Default true for cron+admin; boot drafting is gated separately.
+     */
     autoDraftFromFindings: bool("AUTO_DRAFT_FROM_FINDINGS", true),
+    /**
+     * When true, also auto-draft on web process boot.
+     * Default false — prefer weekly cron or admin to control Claude spend.
+     */
+    autoDraftOnBoot: bool("AUTO_DRAFT_ON_BOOT", false),
     /** Max topics per auto-draft / propose batch (env name kept for Railway compat). */
     findingsBatchSize: process.env.FINDINGS_BATCH_SIZE
       ? Number.parseInt(process.env.FINDINGS_BATCH_SIZE, 10)
@@ -91,9 +99,19 @@ export function getConfig() {
     port: Number.parseInt(process.env.PORT ?? "3000", 10),
     /**
      * When true, the web process schedules a weekly send (Mondays 15:00 UTC).
-     * Also use a Railway Cron service with railway.cron.toml for a dedicated runner.
+     * If you run a dedicated Railway Cron service (railway.cron.toml), set this
+     * false on the web service so only one runner fires.
      */
     weeklyCronEnabled: bool("WEEKLY_CRON_ENABLED", true),
+    /** Required in production for /cron/* routes. */
+    cronSecret: optional("CRON_SECRET"),
+    /** Resend webhook signing secret (whsec_...) for bounce/complaint handling. */
+    resendWebhookSecret: optional("RESEND_WEBHOOK_SECRET"),
+    /** Require cron secret whenever NODE_ENV=production (default true). */
+    requireCronSecretInProduction: bool(
+      "REQUIRE_CRON_SECRET_IN_PRODUCTION",
+      true
+    ),
   };
 }
 

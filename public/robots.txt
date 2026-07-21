@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
+Allow: /archive
 Disallow: /admin
 Disallow: /admin/
 Disallow: /api/admin
+Disallow: /api/webhooks/

@@ -201,11 +201,40 @@ export async function listDueIssues(databaseUrl: string): Promise<Issue[]> {
   const { rows } = await getPool(databaseUrl).query<Issue>(
     `SELECT ${ISSUE_SELECT}
      FROM issues
-     WHERE status = 'ready'
+     WHERE status IN ('ready', 'sending')
        AND (scheduled_for IS NULL OR scheduled_for <= now())
      ORDER BY scheduled_for ASC NULLS LAST, created_at ASC`
   );
   return rows;
+}
+
+/** Published issues for the public archive. */
+export async function listSentIssues(
+  databaseUrl: string,
+  limit = 52
+): Promise<Issue[]> {
+  const { rows } = await getPool(databaseUrl).query<Issue>(
+    `SELECT ${ISSUE_SELECT}
+     FROM issues
+     WHERE status = 'sent'
+     ORDER BY issue_date DESC, sent_at DESC NULLS LAST
+     LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+export async function listSentSubscriberIds(
+  databaseUrl: string,
+  issueId: string
+): Promise<Set<string>> {
+  const { rows } = await getPool(databaseUrl).query<{ subscriber_id: string }>(
+    `SELECT subscriber_id::text AS subscriber_id
+     FROM sends
+     WHERE issue_id = $1 AND status = 'sent'`,
+    [issueId]
+  );
+  return new Set(rows.map((row) => row.subscriber_id));
 }
 
 export async function listReviewIssues(databaseUrl: string): Promise<Issue[]> {
@@ -505,6 +534,60 @@ export async function markIssueSent(
     `UPDATE issues SET status = 'sent', sent_at = now(), updated_at = now() WHERE id = $1`,
     [issueId]
   );
+}
+
+/** Re-queue a partial send so cron can retry remaining recipients. */
+export async function markIssueReadyForRetry(
+  databaseUrl: string,
+  issueId: string
+): Promise<void> {
+  await getPool(databaseUrl).query(
+    `UPDATE issues SET status = 'ready', updated_at = now() WHERE id = $1`,
+    [issueId]
+  );
+}
+
+export async function updateSubscriberStatusByEmail(
+  databaseUrl: string,
+  email: string,
+  status: SubscriberStatus
+): Promise<Subscriber | null> {
+  const { rows } = await getPool(databaseUrl).query<Subscriber>(
+    `UPDATE subscribers
+     SET status = $2, updated_at = now()
+     WHERE lower(email) = lower($1)
+     RETURNING id, email, first_name, status,
+               unsubscribe_token::text AS unsubscribe_token,
+               created_at::text, updated_at::text`,
+    [email.trim(), status]
+  );
+  return rows[0] ?? null;
+}
+
+export async function updateSubscriberPreferences(
+  databaseUrl: string,
+  token: string,
+  input: { first_name?: string | null; status?: SubscriberStatus }
+): Promise<Subscriber | null> {
+  const { rows } = await getPool(databaseUrl).query<Subscriber>(
+    `UPDATE subscribers
+     SET
+       first_name = COALESCE($2, first_name),
+       status = COALESCE($3, status),
+       updated_at = now()
+     WHERE unsubscribe_token = $1
+     RETURNING id, email, first_name, status,
+               unsubscribe_token::text AS unsubscribe_token,
+               created_at::text, updated_at::text`,
+    [
+      token,
+      input.first_name === undefined
+        ? null
+        : input.first_name?.trim() || null,
+      input.status ?? null,
+    ]
+  );
+  return rows[0] ?? null;
 }
 
 export async function recordSend(params: {

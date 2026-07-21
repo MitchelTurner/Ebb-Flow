@@ -6,6 +6,8 @@ import {
   getIssueForSend,
   getStories,
   listDueIssues,
+  listSentSubscriberIds,
+  markIssueReadyForRetry,
   markIssueSending,
   markIssueSent,
   recordSend,
@@ -82,10 +84,15 @@ export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
     throw new Error("No active subscribers to send to");
   }
 
+  const alreadySent = await listSentSubscriberIds(
+    config.databaseUrl,
+    issue.id
+  );
+
   const template = loadTemplate();
   const result: SendResult = {
     issueId: issue.id,
-    attempted: subscribers.length,
+    attempted: 0,
     sent: 0,
     failed: 0,
     skipped: 0,
@@ -108,6 +115,12 @@ export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
   }
 
   for (const subscriber of subscribers) {
+    if (alreadySent.has(subscriber.id)) {
+      result.skipped += 1;
+      continue;
+    }
+
+    result.attempted += 1;
     const html = renderIssueEmail({
       issue,
       stories,
@@ -174,8 +187,16 @@ export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
     }
   }
 
-  if (!config.dryRun && result.failed === 0) {
-    await markIssueSent(config.databaseUrl, issue.id);
+  if (!config.dryRun) {
+    if (result.failed === 0) {
+      await markIssueSent(config.databaseUrl, issue.id);
+    } else {
+      // Leave retriable: already-sent recipients are skipped next run.
+      await markIssueReadyForRetry(config.databaseUrl, issue.id);
+      console.warn(
+        `Issue ${issue.id} had ${result.failed} failure(s); re-queued as ready for retry`
+      );
+    }
   }
 
   return result;

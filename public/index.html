@@ -55,13 +55,18 @@
           <span>Email</span>
           <input type="email" name="email" autocomplete="email" required placeholder="you@example.com">
         </label>
+        <!-- Honeypot: leave empty -->
+        <label class="hp" aria-hidden="true">
+          <span>Company website</span>
+          <input type="text" name="company_website" tabindex="-1" autocomplete="off">
+        </label>
         <button type="submit">
           <span>Subscribe</span>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
         </button>
       </div>
       <div class="meta-row">
-        <p class="note">Free. Cancel anytime.</p>
+        <p class="note">Free. Cancel anytime. <a class="archive-link" href="/archive">Past issues</a></p>
         <p class="message" id="subscribe-message" role="status" aria-live="polite"></p>
       </div>
     </form>

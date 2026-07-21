@@ -23,7 +23,9 @@
     "typecheck": "tsc --noEmit",
     "smoke": "tsx src/smoke-render.ts",
     "smoke:names": "tsx src/nameCheck.smoke.ts",
-    "smoke:cron": "tsx src/weeklyCron.smoke.ts"
+    "smoke:cron": "tsx src/weeklyCron.smoke.ts",
+    "smoke:welcome": "tsx src/welcome.smoke.ts",
+    "smoke:webhooks": "tsx src/webhooks.smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",

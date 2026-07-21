@@ -3,6 +3,9 @@
 #
 # Mondays 15:00 UTC ≈ 7:00am AKST / 8:00am AKDT
 # The start command must exit when finished — do not use `npm run start` here.
+#
+# IMPORTANT: on the *web* service set WEEKLY_CRON_ENABLED=false so Monday send
+# does not also fire inside the long-running web process.
 
 [build]
 builder = "NIXPACKS"

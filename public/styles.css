@@ -383,6 +383,20 @@ button[type="submit"]:disabled {
   font-size: 0.76rem;
   color: rgba(238, 243, 246, 0.42);
 }
+.note .archive-link {
+  color: rgba(196, 161, 95, 0.9);
+  text-decoration: none;
+}
+.note .archive-link:hover { text-decoration: underline; }
+
+/* Honeypot — visually hidden but present in the DOM for bots */
+.hp {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
 
 .message {
   margin: 0;

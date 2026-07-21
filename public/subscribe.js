@@ -8,6 +8,7 @@ form?.addEventListener("submit", async (event) => {
   const data = new FormData(form);
   const email = String(data.get("email") ?? "").trim();
   const first_name = String(data.get("first_name") ?? "").trim();
+  const company_website = String(data.get("company_website") ?? "").trim();
 
   message.className = "message";
   message.textContent = "";
@@ -21,7 +22,7 @@ form?.addEventListener("submit", async (event) => {
       res = await fetch("/api/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, first_name }),
+        body: JSON.stringify({ email, first_name, company_website }),
       });
     } catch {
       throw new Error(
@@ -32,7 +33,7 @@ form?.addEventListener("submit", async (event) => {
     if (!res.ok) throw new Error(payload.error || "Could not subscribe.");
 
     message.className = "message ok";
-    message.textContent = `You're on the list${first_name ? `, ${first_name}` : ""}. Watch your inbox.`;
+    message.textContent = `You're on the list${first_name ? `, ${first_name}` : ""}. Check your inbox for a confirmation email.`;
     form.reset();
   } catch (err) {
     message.className = "message err";

@@ -4,15 +4,20 @@ import { join } from "node:path";
 import { resolveBrandFile, resolvePublicDir } from "./assetPaths.js";
 import { BRAND_LOGO_FILE } from "./brandAssets.js";
 import { createApiRouter } from "./api.js";
+import { isAdminAuthenticated } from "./auth.js";
 import type { AppConfig } from "./config.js";
+import { authorizeCron } from "./cronAuth.js";
 import {
   getIssueForSend,
   getStories,
   getSubscriberByToken,
+  listSentIssues,
   runSqlFile,
   unsubscribeByToken,
+  updateSubscriberPreferences,
 } from "./db.js";
 import { autoDraftFromNewestSources } from "./autoDraft.js";
+import { brandPage, escapeHtml } from "./publicPages.js";
 import { renderIssueEmail } from "./render.js";
 import { sendDueNewsletters } from "./send.js";
 import { startWeeklyCronScheduler } from "./weeklyCron.js";
@@ -24,7 +29,15 @@ const adminHtml = join(publicDir, "admin", "index.html");
 export function createServer(config: AppConfig) {
   const app = express();
   app.use(express.urlencoded({ extended: false }));
-  app.use(express.json());
+  // Keep raw body for Resend webhook signature verification.
+  app.use(
+    express.json({
+      verify: (req, _res, buf) => {
+        (req as express.Request & { rawBody?: string }).rawBody =
+          buf.toString("utf8");
+      },
+    })
+  );
 
   app.use("/api", createApiRouter(config));
 
@@ -36,16 +49,32 @@ export function createServer(config: AppConfig) {
       publicDirExists: existsSync(publicDir),
       brandLogo: Boolean(resolveBrandFile(BRAND_LOGO_FILE)),
       aiKeyConfigured: Boolean(config.anthropicApiKey),
+      weeklyCronEnabled: config.weeklyCronEnabled,
+      autoDraftOnBoot: config.autoDraftOnBoot,
     });
   });
 
   app.get("/preview/:issueId", async (req, res) => {
     try {
-      const issue = await getIssueForSend(config.databaseUrl, req.params.issueId);
+      const issue = await getIssueForSend(
+        config.databaseUrl,
+        req.params.issueId
+      );
       if (!issue) {
         res.status(404).send("Issue not found");
         return;
       }
+
+      const isAdmin = Boolean(
+        config.adminPassword &&
+          isAdminAuthenticated(req, config.adminPassword)
+      );
+      // Public inbox "view in browser" only for sent issues; drafts need admin.
+      if (issue.status !== "sent" && !isAdmin) {
+        res.status(404).send("Issue not found");
+        return;
+      }
+
       const stories = await getStories(config.databaseUrl, issue.id);
       const html = renderIssueEmail({
         issue,
@@ -64,6 +93,81 @@ export function createServer(config: AppConfig) {
     }
   });
 
+  app.get("/archive", async (_req, res) => {
+    try {
+      const issues = await listSentIssues(config.databaseUrl);
+      const items = issues.length
+        ? `<ul class="archive-list">${issues
+            .map(
+              (issue) => `<li>
+              <a href="/archive/${issue.id}">${escapeHtml(issue.subject)}</a>
+              <div class="muted">${escapeHtml(issue.issue_date)}${
+                issue.volume_label
+                  ? ` · ${escapeHtml(issue.volume_label)}`
+                  : ""
+              }</div>
+            </li>`
+            )
+            .join("")}</ul>`
+        : `<p class="muted">No published issues yet — check back after the first send.</p>`;
+
+      res.type("html").send(
+        brandPage({
+          title: "Archive",
+          eyebrow: "Past issues · Tongass Narrows",
+          body: `<p class="muted">Read previous weeks of The Ebb &amp; Flow.</p>
+                 <div class="card">${items}</div>
+                 <p class="muted" style="margin-top:1.5rem;"><a href="/">Subscribe</a></p>`,
+        })
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res
+        .status(500)
+        .type("html")
+        .send(brandPage({ title: "Error", body: `<p>${escapeHtml(message)}</p>` }));
+    }
+  });
+
+  app.get("/archive/:issueId", async (req, res) => {
+    try {
+      const issue = await getIssueForSend(
+        config.databaseUrl,
+        req.params.issueId
+      );
+      if (!issue || issue.status !== "sent") {
+        res
+          .status(404)
+          .type("html")
+          .send(
+            brandPage({
+              title: "Not found",
+              body: `<p>That issue isn’t in the public archive.</p><p><a href="/archive">Back to archive</a></p>`,
+            })
+          );
+        return;
+      }
+      const stories = await getStories(config.databaseUrl, issue.id);
+      const html = renderIssueEmail({
+        issue,
+        stories,
+        logoDelivery: "relative",
+        subscriber: {
+          first_name: "neighbor",
+          unsubscribe_token: "preview",
+        },
+        appUrl: config.appUrl,
+      });
+      res.type("html").send(html);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res
+        .status(500)
+        .type("html")
+        .send(brandPage({ title: "Error", body: `<p>${escapeHtml(message)}</p>` }));
+    }
+  });
+
   app.get("/unsubscribe/:token", async (req, res) => {
     try {
       const subscriber = await getSubscriberByToken(
@@ -71,29 +175,43 @@ export function createServer(config: AppConfig) {
         req.params.token
       );
       if (!subscriber) {
-        res.status(404).type("html").send(page("Unsubscribe", "Link not found."));
+        res
+          .status(404)
+          .type("html")
+          .send(
+            brandPage({ title: "Unsubscribe", body: "<p>Link not found.</p>" })
+          );
         return;
       }
 
       if (subscriber.status === "unsubscribed") {
-        res
-          .type("html")
-          .send(page("Unsubscribed", "You are already unsubscribed."));
+        res.type("html").send(
+          brandPage({
+            title: "Already unsubscribed",
+            body: `<p>You’re already off the list.</p><p class="muted"><a href="/">Back to The Ebb &amp; Flow</a></p>`,
+          })
+        );
         return;
       }
 
-      res.type("html").send(page(
-        "Confirm unsubscribe",
-        `<p>Unsubscribe <strong>${escape(subscriber.email)}</strong> from The Ebb &amp; Flow?</p>
-         <form method="POST" action="/unsubscribe/${subscriber.unsubscribe_token}">
-           <button type="submit" style="margin-top:16px;padding:10px 18px;background:#16293a;color:#fff;border:0;cursor:pointer;">
-             Unsubscribe
-           </button>
-         </form>`
-      ));
+      res.type("html").send(
+        brandPage({
+          title: "Confirm unsubscribe",
+          body: `<div class="card">
+            <p>Leave the list for <strong>${escapeHtml(subscriber.email)}</strong>?</p>
+            <form method="POST" action="/unsubscribe/${subscriber.unsubscribe_token}">
+              <button type="submit">Unsubscribe</button>
+              <a class="btn secondary" href="/preferences/${subscriber.unsubscribe_token}">Manage preferences</a>
+            </form>
+          </div>`,
+        })
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      res.status(500).type("html").send(page("Error", escape(message)));
+      res
+        .status(500)
+        .type("html")
+        .send(brandPage({ title: "Error", body: `<p>${escapeHtml(message)}</p>` }));
     }
   });
 
@@ -104,20 +222,27 @@ export function createServer(config: AppConfig) {
         req.params.token
       );
       if (!subscriber) {
-        res.status(404).type("html").send(page("Unsubscribe", "Link not found."));
+        res
+          .status(404)
+          .type("html")
+          .send(
+            brandPage({ title: "Unsubscribe", body: "<p>Link not found.</p>" })
+          );
         return;
       }
-      res
-        .type("html")
-        .send(
-          page(
-            "Unsubscribed",
-            `You have been unsubscribed (<strong>${escape(subscriber.email)}</strong>).`
-          )
-        );
+      res.type("html").send(
+        brandPage({
+          title: "Unsubscribed",
+          body: `<p>You’re off the list (<strong>${escapeHtml(subscriber.email)}</strong>).</p>
+                 <p class="muted">Changed your mind? <a href="/preferences/${subscriber.unsubscribe_token}">Reactivate here</a>.</p>`,
+        })
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      res.status(500).type("html").send(page("Error", escape(message)));
+      res
+        .status(500)
+        .type("html")
+        .send(brandPage({ title: "Error", body: `<p>${escapeHtml(message)}</p>` }));
     }
   });
 
@@ -128,32 +253,105 @@ export function createServer(config: AppConfig) {
         req.params.token
       );
       if (!subscriber) {
-        res.status(404).type("html").send(page("Preferences", "Link not found."));
+        res
+          .status(404)
+          .type("html")
+          .send(
+            brandPage({ title: "Preferences", body: "<p>Link not found.</p>" })
+          );
         return;
       }
+
+      const statusNote =
+        subscriber.status === "active"
+          ? "You’re subscribed and receiving the weekly roundup."
+          : subscriber.status === "bounced"
+            ? "Delivery is paused because mail to this address bounced. Update nothing here — reply to the newsroom if this is wrong."
+            : "You’re currently unsubscribed.";
+
       res.type("html").send(
-        page(
-          "Preferences",
-          `<p>Status for <strong>${escape(subscriber.email)}</strong>: <em>${escape(subscriber.status)}</em></p>
-           <p>To leave the list, <a href="/unsubscribe/${subscriber.unsubscribe_token}">unsubscribe here</a>.</p>`
-        )
+        brandPage({
+          title: "Preferences",
+          body: `<p class="muted">${escapeHtml(statusNote)}</p>
+          <div class="card">
+            <form method="POST" action="/preferences/${subscriber.unsubscribe_token}">
+              <label>Email
+                <input type="email" value="${escapeHtml(subscriber.email)}" disabled>
+              </label>
+              <label>First name
+                <input type="text" name="first_name" value="${escapeHtml(subscriber.first_name ?? "")}" autocomplete="given-name" placeholder="Neighbor">
+              </label>
+              ${
+                subscriber.status === "unsubscribed"
+                  ? `<button type="submit" name="action" value="reactivate">Resubscribe</button>`
+                  : `<button type="submit" name="action" value="save">Save name</button>
+                     <button type="submit" name="action" value="unsubscribe" class="secondary">Unsubscribe</button>`
+              }
+            </form>
+          </div>
+          <p class="muted" style="margin-top:1.25rem;"><a href="/archive">Browse the archive</a> · <a href="/">Home</a></p>`,
+        })
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      res.status(500).type("html").send(page("Error", escape(message)));
+      res
+        .status(500)
+        .type("html")
+        .send(brandPage({ title: "Error", body: `<p>${escapeHtml(message)}</p>` }));
+    }
+  });
+
+  app.post("/preferences/:token", async (req, res) => {
+    try {
+      const action = String(req.body?.action ?? "save");
+      const firstName = String(req.body?.first_name ?? "").trim() || null;
+      let status: "active" | "unsubscribed" | undefined;
+      if (action === "unsubscribe") status = "unsubscribed";
+      if (action === "reactivate") status = "active";
+
+      const subscriber = await updateSubscriberPreferences(
+        config.databaseUrl,
+        req.params.token,
+        {
+          first_name: firstName,
+          status,
+        }
+      );
+      if (!subscriber) {
+        res
+          .status(404)
+          .type("html")
+          .send(
+            brandPage({ title: "Preferences", body: "<p>Link not found.</p>" })
+          );
+        return;
+      }
+
+      const message =
+        action === "unsubscribe"
+          ? "You’re unsubscribed."
+          : action === "reactivate"
+            ? "Welcome back — you’re subscribed again."
+            : "Preferences saved.";
+
+      res.type("html").send(
+        brandPage({
+          title: "Preferences",
+          body: `<p>${escapeHtml(message)}</p>
+                 <p class="muted"><a href="/preferences/${subscriber.unsubscribe_token}">Back to preferences</a></p>`,
+        })
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res
+        .status(500)
+        .type("html")
+        .send(brandPage({ title: "Error", body: `<p>${escapeHtml(message)}</p>` }));
     }
   });
 
   app.post("/cron/send", async (req, res) => {
-    const secret = process.env.CRON_SECRET?.trim();
-    if (secret) {
-      const header = req.get("authorization") ?? "";
-      if (header !== `Bearer ${secret}`) {
-        res.status(401).json({ error: "unauthorized" });
-        return;
-      }
-    }
-
+    if (!authorizeCron(config, req, res)) return;
     try {
       const results = await sendDueNewsletters(config);
       res.json({ ok: true, results });
@@ -164,15 +362,7 @@ export function createServer(config: AppConfig) {
   });
 
   app.post("/cron/auto-draft", async (req, res) => {
-    const secret = process.env.CRON_SECRET?.trim();
-    if (secret) {
-      const header = req.get("authorization") ?? "";
-      if (header !== `Bearer ${secret}`) {
-        res.status(401).json({ error: "unauthorized" });
-        return;
-      }
-    }
-
+    if (!authorizeCron(config, req, res)) return;
     try {
       const draft = await autoDraftFromNewestSources(config);
       res.json({ ok: true, draft });
@@ -227,9 +417,6 @@ export async function startServer(config: AppConfig): Promise<void> {
     console.warn(`Warning: public directory not found at ${publicDir}`);
   }
 
-  // Bind the port first so Railway healthchecks (/health) succeed quickly.
-  // Schema + Claude auto-draft can take longer than healthcheckTimeout and
-  // previously blocked listen(), which made the UI show "Failed to fetch".
   const app = createServer(config);
   await new Promise<void>((resolve) => {
     app.listen(config.port, () => {
@@ -244,7 +431,6 @@ export async function startServer(config: AppConfig): Promise<void> {
 
 async function runBootJobs(config: AppConfig): Promise<void> {
   try {
-    // Schema uses IF NOT EXISTS / ADD COLUMN IF NOT EXISTS — safe every boot.
     await ensureSchema(config.databaseUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -253,7 +439,14 @@ async function runBootJobs(config: AppConfig): Promise<void> {
 
   startWeeklyCronScheduler(config);
 
-  if (!config.autoDraftFromFindings) return;
+  if (!config.autoDraftFromFindings || !config.autoDraftOnBoot) {
+    if (!config.autoDraftOnBoot) {
+      console.log(
+        "Boot auto-draft off (AUTO_DRAFT_ON_BOOT=false). Use admin or POST /cron/auto-draft."
+      );
+    }
+    return;
+  }
 
   try {
     const draft = await autoDraftFromNewestSources(config);
@@ -268,35 +461,4 @@ async function runBootJobs(config: AppConfig): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`Auto-draft failed: ${message}`);
   }
-}
-
-function escape(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function page(title: string, body: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escape(title)} · The Ebb &amp; Flow</title>
-  <style>
-    body { margin:0; font-family: Georgia, 'Times New Roman', serif; background:#f0ede8; color:#3a352e; }
-    main { max-width:520px; margin:64px auto; padding:0 24px; }
-    h1 { font-size:28px; color:#16293a; }
-    a { color:#16293a; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>${escape(title)}</h1>
-    ${body}
-  </main>
-</body>
-</html>`;
 }

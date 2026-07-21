@@ -426,13 +426,27 @@ async function loadStories(issueId) {
                 ? `<p class="muted"><em>${escapeHtml(story.why_it_matters)}</em></p>`
                 : ""
             }
-            ${
-              story.source_notes
-                ? `<details class="grounding" open><summary>Source grounding</summary><pre class="grounding-pre">${escapeHtml(
-                    story.source_notes
-                  )}</pre></details>`
-                : `<p class="muted">No source grounding on this story.</p>`
-            }
+            <div class="grounding-panel ${
+              story.source_notes ? "has-notes" : "missing-notes"
+            }">
+              <div class="grounding-head">
+                <strong>Transcript grounding</strong>
+                <span class="badge ${
+                  story.source_notes ? "done" : "draft"
+                }">${
+                  story.source_notes
+                    ? "Names must appear below"
+                    : "Missing — fact-check / send will block"
+                }</span>
+              </div>
+              ${
+                story.source_notes
+                  ? `<details class="grounding" open><summary>Show source notes</summary><pre class="grounding-pre">${escapeHtml(
+                      story.source_notes
+                    )}</pre></details>`
+                  : `<p class="muted">Paste the raw transcript excerpt into Source notes when editing. Person names in the story must appear in that text.</p>`
+              }
+            </div>
             <div class="row-actions">
               <button type="button" class="secondary" data-story-edit='${escapeAttr(JSON.stringify(story))}'>Edit</button>
               <button type="button" class="danger" data-story-delete="${story.id}">Delete</button>

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import type { AppConfig } from "./config.js";
 import {
   clearAdminCookie,
@@ -23,8 +23,12 @@ import {
   subscribe,
   updateIssue,
   updateSubscriberStatus,
+  updateSubscriberStatusByEmail,
   upsertStory,
 } from "./db.js";
+import { rateLimit } from "./rateLimit.js";
+import { bounceEmailsFromEvent, verifyResendWebhook } from "./webhooks.js";
+import { sendSubscribeThankYou } from "./welcome.js";
 import {
   createTranscript,
   deleteTranscript,
@@ -72,6 +76,32 @@ export function createApiRouter(config: AppConfig): Router {
 
   router.post("/subscribe", async (req, res) => {
     try {
+      // Honeypot — bots fill hidden fields; humans leave blank.
+      const honeypot = String(req.body?.company_website ?? "").trim();
+      if (honeypot) {
+        res.status(201).json({ ok: true, subscriber: { email: "", status: "active" } });
+        return;
+      }
+
+      const ip =
+        (req.headers["x-forwarded-for"] as string | undefined)
+          ?.split(",")[0]
+          ?.trim() ||
+        req.ip ||
+        "unknown";
+      const limited = rateLimit({
+        key: `subscribe:${ip}`,
+        limit: 8,
+        windowMs: 60 * 60 * 1000,
+      });
+      if (!limited.ok) {
+        res.setHeader("Retry-After", String(limited.retryAfterSec));
+        res.status(429).json({
+          error: "Too many subscribe attempts. Try again later.",
+        });
+        return;
+      }
+
       const email = String(req.body?.email ?? "").trim().toLowerCase();
       const firstName = String(req.body?.first_name ?? "").trim() || null;
       if (!EMAIL_RE.test(email)) {
@@ -79,6 +109,7 @@ export function createApiRouter(config: AppConfig): Router {
         return;
       }
       const subscriber = await subscribe(config.databaseUrl, email, firstName);
+      const welcome = await sendSubscribeThankYou(config, subscriber);
       res.status(201).json({
         ok: true,
         subscriber: {
@@ -86,6 +117,7 @@ export function createApiRouter(config: AppConfig): Router {
           first_name: subscriber.first_name,
           status: subscriber.status,
         },
+        welcome_email: welcome,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -93,6 +125,43 @@ export function createApiRouter(config: AppConfig): Router {
         ? " Database tables are missing — redeploy or run npm run db:migrate."
         : "";
       res.status(500).json({ error: `${message}${hint}` });
+    }
+  });
+
+  router.post("/webhooks/resend", async (req, res) => {
+    try {
+      const rawBody =
+        (req as Request & { rawBody?: string }).rawBody ??
+        JSON.stringify(req.body ?? {});
+      const verified = verifyResendWebhook({
+        secret: config.resendWebhookSecret,
+        req,
+        rawBody,
+      });
+      if (!verified.ok) {
+        res.status(401).json({ error: verified.error });
+        return;
+      }
+
+      const emails = bounceEmailsFromEvent(req.body);
+      const updated: string[] = [];
+      for (const email of emails) {
+        const status =
+          (req.body as { type?: string })?.type === "email.complained"
+            ? ("unsubscribed" as const)
+            : ("bounced" as const);
+        const row = await updateSubscriberStatusByEmail(
+          config.databaseUrl,
+          email,
+          status
+        );
+        if (row) updated.push(email);
+      }
+
+      res.json({ ok: true, updated });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
     }
   });
 
