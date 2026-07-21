@@ -296,8 +296,36 @@
 
         <div class="stack-block">
           <div class="block-head">
+            <h3>Context files for AI</h3>
+            <p class="muted">Upload agendas, minutes, notes, or PDFs. Extracted text is added to Claude’s grounding for rewrite, fact-check, and the name gate.</p>
+          </div>
+          <form id="context-upload-form" class="grid-form cols-2 surface">
+            <label>Attach to
+              <select name="story_position">
+                <option value="issue">Whole issue</option>
+                <option value="1">Story 1 · Lead</option>
+                <option value="2">Story 2</option>
+                <option value="3">Story 3</option>
+                <option value="4">Story 4</option>
+                <option value="5">Story 5</option>
+                <option value="6">Story 6</option>
+              </select>
+            </label>
+            <label>File
+              <input type="file" name="file" accept=".pdf,.txt,.md,.markdown,.csv,.html,.htm,.json,text/plain,application/pdf">
+            </label>
+            <div class="cols-span align-end">
+              <button type="submit" class="secondary">Upload context</button>
+            </div>
+            <p class="cols-span muted" id="context-upload-status"></p>
+          </form>
+          <div id="context-files-list" class="context-files-list"></div>
+        </div>
+
+        <div class="stack-block">
+          <div class="block-head">
             <h3>Stories</h3>
-            <p class="muted">Paste the raw transcript (or keep auto-attached grounding). Person names in the draft must appear in that text — the name gate blocks schedule/send otherwise.</p>
+            <p class="muted">Paste the raw transcript (or keep auto-attached grounding). Person names in the draft must appear in that text or uploaded context — the name gate blocks schedule/send otherwise.</p>
           </div>
           <form id="story-form" class="grid-form cols-2 surface">
             <input type="hidden" name="id">

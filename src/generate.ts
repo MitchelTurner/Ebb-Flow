@@ -6,6 +6,7 @@ import {
   type GeneratedIssueCopy,
 } from "./claude.js";
 import type { AppConfig } from "./config.js";
+import { loadStoriesWithContext } from "./contextFiles.js";
 import {
   getIssueForSend,
   getStories,
@@ -119,7 +120,13 @@ export async function generateAndSaveIssue(
     throw new Error("Add story updates before generating copy.");
   }
 
-  const hasNotes = stories.some(
+  const groundedStories = await loadStoriesWithContext(
+    config.databaseUrl,
+    issueId,
+    stories
+  );
+
+  const hasNotes = groundedStories.some(
     (story) =>
       (story.source_notes && story.source_notes.trim()) ||
       (story.summary && story.summary.trim()) ||
@@ -127,14 +134,14 @@ export async function generateAndSaveIssue(
   );
   if (!hasNotes) {
     throw new Error(
-      "Stories need source notes (or at least a title/summary) for Claude to write from."
+      "Stories need source notes or uploaded context files (or at least a title/summary) for Claude to write from."
     );
   }
 
   const generated = await generateIssueCopy({
     apiKey: config.anthropicApiKey,
     issue,
-    stories,
+    stories: groundedStories,
   });
 
   const marinePatch = await maybeAutofillMarine(config, issue);
@@ -204,10 +211,16 @@ export async function factReviewAndMaybeApply(
     throw new Error("Add stories before running AI fact-check.");
   }
 
+  const groundedStories = await loadStoriesWithContext(
+    config.databaseUrl,
+    issueId,
+    stories
+  );
+
   const review = await factReviewIssue({
     apiKey: config.anthropicApiKey,
     issue,
-    stories,
+    stories: groundedStories,
   });
 
   const shouldApply =
@@ -220,17 +233,13 @@ export async function factReviewAndMaybeApply(
   let findings = [...review.findings];
   let summary = review.summary;
 
+  const withContext = async (list: Story[]) =>
+    loadStoriesWithContext(config.databaseUrl, issueId, list);
+
   if (shouldApply) {
     let copy =
       review.corrected ?? issueCopyFrom(workingIssue, workingStories);
-    const preSaveNames = checkIssueNames(
-      {
-        ...workingIssue,
-        subject: copy.subject,
-        preheader: copy.preheader,
-        intro: copy.intro,
-        coming_up: copy.coming_up,
-      },
+    const draftStories = await withContext(
       workingStories.map((story) => {
         const next = copy.stories.find((s) => s.position === story.position);
         return next
@@ -246,6 +255,16 @@ export async function factReviewAndMaybeApply(
             }
           : story;
       })
+    );
+    const preSaveNames = checkIssueNames(
+      {
+        ...workingIssue,
+        subject: copy.subject,
+        preheader: copy.preheader,
+        intro: copy.intro,
+        coming_up: copy.coming_up,
+      },
+      draftStories
     );
 
     if (!preSaveNames.ok) {
@@ -272,7 +291,10 @@ export async function factReviewAndMaybeApply(
     applied = true;
   }
 
-  const finalNames = checkIssueNames(workingIssue, workingStories);
+  const finalNames = checkIssueNames(
+    workingIssue,
+    await withContext(workingStories)
+  );
   if (!finalNames.ok) {
     // Last-resort scrub on whatever is currently saved.
     const scrubbed = scrubUngroundedNames(
@@ -293,7 +315,10 @@ export async function factReviewAndMaybeApply(
     summary = `${summary} Name gate still found unsupported names; they were stripped.`.trim();
   }
 
-  const nameGate = checkIssueNames(workingIssue, workingStories);
+  const nameGate = checkIssueNames(
+    workingIssue,
+    await withContext(workingStories)
+  );
   // Stamp only when every person-like name is grounded. After apply/scrub, trust
   // the corrected copy for non-name LLM findings; otherwise require review.ok.
   const reviewOk = nameGate.ok && (applied || review.ok);

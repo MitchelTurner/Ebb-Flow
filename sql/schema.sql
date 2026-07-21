@@ -135,6 +135,22 @@ CREATE INDEX IF NOT EXISTS idx_topic_proposals_pending
   ON topic_proposals (created_at DESC)
   WHERE status = 'pending';
 
+-- Uploaded files that give Claude extra grounding for an issue / story.
+CREATE TABLE IF NOT EXISTS context_files (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  issue_id UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  /** NULL = issue-wide context; 1–6 = attach to that story position */
+  story_position INT CHECK (story_position IS NULL OR story_position BETWEEN 1 AND 6),
+  filename TEXT NOT NULL,
+  mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+  byte_size INT NOT NULL DEFAULT 0,
+  content_text TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_context_files_issue
+  ON context_files (issue_id, created_at DESC);
+
 -- Legacy tables from earlier app versions (safe no-ops if already gone).
 DROP TABLE IF EXISTS tasks;
 DROP TABLE IF EXISTS findings;

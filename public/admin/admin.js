@@ -409,7 +409,116 @@ function fillIssueForm(issue) {
     scheduledField.value = toLocalInputValue(issue.scheduled_for);
   }
   loadStories(issue.id);
+  loadContextFiles(issue.id);
 }
+
+async function loadContextFiles(issueId) {
+  const list = document.getElementById("context-files-list");
+  const status = document.getElementById("context-upload-status");
+  if (!list) return;
+  if (!issueId) {
+    list.innerHTML = `<p class="muted">Save the issue first, then upload context files.</p>`;
+    return;
+  }
+  try {
+    const { files } = await api(`/api/admin/issues/${issueId}/context-files`);
+    if (!files?.length) {
+      list.innerHTML = `<p class="muted">No context files yet. Upload PDF/TXT/MD/CSV notes for Claude.</p>`;
+      return;
+    }
+    list.innerHTML = files
+      .map((file) => {
+        const scope =
+          file.story_position == null
+            ? "Whole issue"
+            : `Story ${file.story_position}`;
+        const kb = Math.max(1, Math.round((file.byte_size || 0) / 1024));
+        return `<div class="context-file-row">
+          <div>
+            <strong>${escapeHtml(file.filename)}</strong>
+            <div class="muted">${escapeHtml(scope)} · ${kb} KB · ${file.char_count || 0} chars for AI</div>
+          </div>
+          <button type="button" class="danger" data-context-delete="${file.id}">Remove</button>
+        </div>`;
+      })
+      .join("");
+  } catch (err) {
+    if (status) {
+      status.textContent =
+        err instanceof Error ? err.message : "Could not load context files.";
+    }
+  }
+}
+
+document
+  .getElementById("context-upload-form")
+  ?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!selectedIssueId) {
+      flash("Open an issue before uploading context.", "err");
+      return;
+    }
+    const form = event.currentTarget;
+    if (!(form instanceof HTMLFormElement)) return;
+    const status = document.getElementById("context-upload-status");
+    const fileInput = form.elements.namedItem("file");
+    const positionField = form.elements.namedItem("story_position");
+    if (!(fileInput instanceof HTMLInputElement) || !fileInput.files?.[0]) {
+      flash("Choose a file to upload.", "err");
+      return;
+    }
+
+    const body = new FormData();
+    body.append("file", fileInput.files[0]);
+    body.append(
+      "story_position",
+      positionField instanceof HTMLSelectElement ? positionField.value : "issue"
+    );
+
+    const button = form.querySelector('button[type="submit"]');
+    if (button instanceof HTMLButtonElement) button.disabled = true;
+    if (status) status.textContent = "Uploading & extracting text…";
+
+    try {
+      const res = await fetch(`/api/admin/issues/${selectedIssueId}/context-files`, {
+        method: "POST",
+        body,
+        credentials: "same-origin",
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || "Upload failed.");
+      flash(`Added ${payload.file?.filename || "file"} to AI context.`, "ok");
+      form.reset();
+      if (status) status.textContent = "";
+      await loadContextFiles(selectedIssueId);
+      await loadStories(selectedIssueId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed.";
+      flash(message, "err");
+      if (status) status.textContent = message;
+    } finally {
+      if (button instanceof HTMLButtonElement) button.disabled = false;
+    }
+  });
+
+document
+  .getElementById("context-files-list")
+  ?.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.dataset.contextDelete) return;
+    if (!selectedIssueId) return;
+    if (!confirm("Remove this context file from AI grounding?")) return;
+    try {
+      await api(
+        `/api/admin/issues/${selectedIssueId}/context-files/${target.dataset.contextDelete}`,
+        { method: "DELETE", body: "{}" }
+      );
+      flash("Context file removed.", "ok");
+      await loadContextFiles(selectedIssueId);
+    } catch (err) {
+      flash(err instanceof Error ? err.message : "Could not remove file.", "err");
+    }
+  });
 
 async function loadStories(issueId) {
   const { stories } = await api(`/api/admin/issues/${issueId}/stories`);

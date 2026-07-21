@@ -1,4 +1,5 @@
 import { Router, type Request } from "express";
+import multer from "multer";
 import type { AppConfig } from "./config.js";
 import {
   clearAdminCookie,
@@ -8,6 +9,12 @@ import {
   verifyAdminPassword,
 } from "./auth.js";
 import { autoDraftFromNewestSources } from "./autoDraft.js";
+import {
+  createContextFile,
+  deleteContextFile,
+  listContextFiles,
+  loadStoriesWithContext,
+} from "./contextFiles.js";
 import {
   createIssue,
   deleteIssue,
@@ -26,9 +33,15 @@ import {
   updateSubscriberStatusByEmail,
   upsertStory,
 } from "./db.js";
+import { ExtractTextError, extractTextFromUpload } from "./extractText.js";
 import { rateLimit } from "./rateLimit.js";
 import { bounceEmailsFromEvent, verifyResendWebhook } from "./webhooks.js";
 import { sendSubscribeThankYou } from "./welcome.js";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+});
 import {
   createTranscript,
   deleteTranscript,
@@ -479,7 +492,11 @@ export function createApiRouter(config: AppConfig): Router {
         res.status(404).json({ ok: false, error: "Issue not found" });
         return;
       }
-      const stories = await getStories(config.databaseUrl, current.id);
+      const stories = await loadStoriesWithContext(
+        config.databaseUrl,
+        current.id,
+        await getStories(config.databaseUrl, current.id)
+      );
       const checklist = buildEditorialChecklist(current, stories);
       if (!dryRun && !checklist.ok && !req.body?.force) {
         res.status(400).json({
@@ -531,13 +548,133 @@ export function createApiRouter(config: AppConfig): Router {
         res.status(404).json({ error: "Issue not found" });
         return;
       }
-      const stories = await getStories(config.databaseUrl, issue.id);
+      const stories = await loadStoriesWithContext(
+        config.databaseUrl,
+        issue.id,
+        await getStories(config.databaseUrl, issue.id)
+      );
       res.json({ checklist: buildEditorialChecklist(issue, stories) });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: message });
     }
   });
+
+  router.get("/admin/issues/:id/context-files", guard, async (req, res) => {
+    try {
+      const files = await listContextFiles(config.databaseUrl, req.params.id);
+      res.json({
+        files: files.map((file) => ({
+          id: file.id,
+          issue_id: file.issue_id,
+          story_position: file.story_position,
+          filename: file.filename,
+          mime_type: file.mime_type,
+          byte_size: file.byte_size,
+          char_count: file.content_text.length,
+          created_at: file.created_at,
+        })),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post(
+    "/admin/issues/:id/context-files",
+    guard,
+    upload.single("file"),
+    async (req, res) => {
+      try {
+        const issue = await getIssueForSend(config.databaseUrl, req.params.id);
+        if (!issue) {
+          res.status(404).json({ error: "Issue not found" });
+          return;
+        }
+        const file = req.file;
+        if (!file) {
+          badRequest(res, "Choose a file to upload.");
+          return;
+        }
+
+        const rawPosition = String(req.body?.story_position ?? "").trim();
+        let storyPosition: number | null = null;
+        if (rawPosition && rawPosition !== "all" && rawPosition !== "issue") {
+          const n = Number(rawPosition);
+          if (!Number.isInteger(n) || n < 1 || n > 6) {
+            badRequest(res, "story_position must be 1–6 or empty for issue-wide.");
+            return;
+          }
+          storyPosition = n;
+        }
+
+        const contentText = await extractTextFromUpload({
+          filename: file.originalname,
+          mimeType: file.mimetype,
+          buffer: file.buffer,
+        });
+
+        const saved = await createContextFile(config.databaseUrl, {
+          issueId: req.params.id,
+          storyPosition,
+          filename: file.originalname || "upload.txt",
+          mimeType: file.mimetype || "application/octet-stream",
+          byteSize: file.size,
+          contentText,
+        });
+
+        await updateIssue(config.databaseUrl, req.params.id, {
+          fact_reviewed_at: null,
+        });
+
+        res.status(201).json({
+          file: {
+            id: saved.id,
+            issue_id: saved.issue_id,
+            story_position: saved.story_position,
+            filename: saved.filename,
+            mime_type: saved.mime_type,
+            byte_size: saved.byte_size,
+            char_count: saved.content_text.length,
+            created_at: saved.created_at,
+          },
+        });
+      } catch (err) {
+        if (err instanceof ExtractTextError) {
+          badRequest(res, err.message);
+          return;
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+      }
+    }
+  );
+
+  router.delete(
+    "/admin/issues/:id/context-files/:fileId",
+    guard,
+    async (req, res) => {
+      try {
+        const ok = await deleteContextFile(
+          config.databaseUrl,
+          req.params.id,
+          req.params.fileId
+        );
+        if (!ok) {
+          res.status(404).json({ error: "File not found" });
+          return;
+        }
+        await updateIssue(config.databaseUrl, req.params.id, {
+          fact_reviewed_at: null,
+        });
+        res.json({ ok: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: message });
+      }
+    }
+  );
 
   router.post("/admin/issues/:id/schedule", guard, async (req, res) => {
     try {
@@ -552,7 +689,11 @@ export function createApiRouter(config: AppConfig): Router {
         res.status(404).json({ error: "Issue not found or not schedulable" });
         return;
       }
-      const stories = await getStories(config.databaseUrl, current.id);
+      const stories = await loadStoriesWithContext(
+        config.databaseUrl,
+        current.id,
+        await getStories(config.databaseUrl, current.id)
+      );
       const checklist = buildEditorialChecklist(current, stories);
       if (!checklist.ok && !req.body?.force) {
         res.status(400).json({

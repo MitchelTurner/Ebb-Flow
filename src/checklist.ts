@@ -49,7 +49,7 @@ export function buildEditorialChecklist(
     },
     {
       id: "grounding",
-      label: "Every story has transcript grounding",
+      label: "Every story has transcript / uploaded context grounding",
       pass:
         stories.length > 0 && stories.every((s) => Boolean(s.source_notes?.trim())),
       required: true,
@@ -57,8 +57,8 @@ export function buildEditorialChecklist(
     {
       id: "names",
       label: nameGate.ok
-        ? "Person names match transcript grounding"
-        : `Person names match transcript (${nameGate.ungrounded.length} unsupported)`,
+        ? "Person names match grounding (notes + uploads)"
+        : `Person names match grounding (${nameGate.ungrounded.length} unsupported)`,
       pass: stories.length > 0 && nameGate.ok,
       required: true,
     },

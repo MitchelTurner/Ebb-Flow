@@ -21,4 +21,5 @@ jobs:
       - run: npm run smoke:cron
       - run: npm run smoke:welcome
       - run: npm run smoke:webhooks
+      - run: npm run smoke:extract
       - run: npm run build

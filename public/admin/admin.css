@@ -837,6 +837,25 @@ tbody tr:hover { background: rgba(232, 238, 243, 0.03); }
   color: var(--mute);
 }
 
+.context-files-list {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.context-file-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.16);
+}
+.context-file-row strong {
+  font-size: 0.95rem;
+}
+
 .proposals-list { display: grid; gap: var(--space-3); }
 .proposal-card {
   border: 1px solid var(--line);
