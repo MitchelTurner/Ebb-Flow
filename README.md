@@ -6,7 +6,7 @@ Pulls issue + subscriber data from **Railway Postgres**, fills `templates/ebb-an
 
 - Parameterized HTML email template
 - Postgres schema: `subscribers`, `issues`, `stories`, `sends`, `transcripts`
-- Public subscribe page (`/`)
+- Public subscribe page (`/`) with Resend thank-you confirmation email
 - Admin UI (`/admin`) — manage subscribers, transcripts, draft/send emails
 - CLI: migrate / seed / preview / send
 - Railway-ready `railway.toml` + Dockerfile

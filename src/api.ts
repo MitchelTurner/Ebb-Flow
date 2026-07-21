@@ -50,6 +50,7 @@ import type {
   ProposalTopic,
   SubscriberStatus,
 } from "./types.js";
+import { sendSubscribeThankYou } from "./welcome.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -79,6 +80,7 @@ export function createApiRouter(config: AppConfig): Router {
         return;
       }
       const subscriber = await subscribe(config.databaseUrl, email, firstName);
+      const welcome = await sendSubscribeThankYou(config, subscriber);
       res.status(201).json({
         ok: true,
         subscriber: {
@@ -86,6 +88,7 @@ export function createApiRouter(config: AppConfig): Router {
           first_name: subscriber.first_name,
           status: subscriber.status,
         },
+        welcome_email: welcome,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
