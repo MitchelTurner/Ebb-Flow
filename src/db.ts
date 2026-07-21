@@ -6,6 +6,8 @@ import type {
   DashboardStats,
   Issue,
   IssueStatus,
+  SendFailureRow,
+  SendOpsSnapshot,
   Story,
   Subscriber,
   SubscriberStatus,
@@ -94,10 +96,15 @@ export async function getDashboardStats(databaseUrl: string): Promise<DashboardS
     SELECT
       (SELECT COUNT(*)::int FROM subscribers WHERE status = 'active') AS active_subscribers,
       (SELECT COUNT(*)::int FROM subscribers) AS total_subscribers,
+      (SELECT COUNT(*)::int FROM subscribers WHERE status = 'bounced') AS bounced_subscribers,
       (SELECT COUNT(*)::int FROM issues WHERE status = 'draft') AS draft_issues,
       (SELECT COUNT(*)::int FROM issues WHERE status = 'ready') AS ready_issues,
       (SELECT COUNT(*)::int FROM issues
-        WHERE status = 'ready' AND scheduled_for IS NOT NULL AND scheduled_for > now()) AS scheduled_issues
+        WHERE status = 'ready' AND scheduled_for IS NOT NULL AND scheduled_for > now()) AS scheduled_issues,
+      (SELECT COUNT(*)::int FROM sends
+        WHERE status = 'failed' AND created_at > now() - interval '7 days') AS failed_sends_7d,
+      (SELECT COUNT(*)::int FROM sends
+        WHERE status = 'sent' AND COALESCE(sent_at, created_at) > now() - interval '7 days') AS sent_7d
   `);
 
   const unused_transcripts = await countUnusedSourceRows(databaseUrl, "transcripts");
@@ -105,6 +112,51 @@ export async function getDashboardStats(databaseUrl: string): Promise<DashboardS
   return {
     ...rows[0],
     unused_transcripts,
+  };
+}
+
+/** Send-ops panel: bounce counts, recent failures, due queue. */
+export async function getSendOpsSnapshot(
+  databaseUrl: string
+): Promise<SendOpsSnapshot> {
+  const db = getPool(databaseUrl);
+  const { rows: counts } = await db.query<{
+    bounced_subscribers: number;
+    failed_sends_7d: number;
+    sent_7d: number;
+    ready_due: number;
+  }>(`
+    SELECT
+      (SELECT COUNT(*)::int FROM subscribers WHERE status = 'bounced') AS bounced_subscribers,
+      (SELECT COUNT(*)::int FROM sends
+        WHERE status = 'failed' AND created_at > now() - interval '7 days') AS failed_sends_7d,
+      (SELECT COUNT(*)::int FROM sends
+        WHERE status = 'sent' AND COALESCE(sent_at, created_at) > now() - interval '7 days') AS sent_7d,
+      (SELECT COUNT(*)::int FROM issues
+        WHERE status IN ('ready', 'sending')
+          AND (scheduled_for IS NULL OR scheduled_for <= now())) AS ready_due
+  `);
+
+  const { rows: recent_failures } = await db.query<SendFailureRow>(
+    `SELECT s.issue_id::text AS issue_id,
+            i.subject,
+            sub.email,
+            s.error,
+            s.created_at::text AS created_at
+     FROM sends s
+     JOIN issues i ON i.id = s.issue_id
+     JOIN subscribers sub ON sub.id = s.subscriber_id
+     WHERE s.status = 'failed'
+     ORDER BY s.created_at DESC
+     LIMIT 12`
+  );
+
+  return {
+    bounced_subscribers: counts[0]?.bounced_subscribers ?? 0,
+    failed_sends_7d: counts[0]?.failed_sends_7d ?? 0,
+    sent_7d: counts[0]?.sent_7d ?? 0,
+    ready_due: counts[0]?.ready_due ?? 0,
+    recent_failures,
   };
 }
 

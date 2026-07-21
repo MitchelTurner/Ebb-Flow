@@ -120,3 +120,50 @@ export async function loadStoriesWithContext(
   const files = await listContextFiles(databaseUrl, issueId);
   return storiesWithContextFiles(stories, files);
 }
+
+function tokenize(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 3);
+}
+
+/**
+ * Guess which story an upload belongs to from filename / opening text.
+ * Returns null when confidence is too low (keep issue-wide).
+ */
+export function matchStoryPositionForUpload(
+  stories: Story[],
+  filename: string,
+  contentText: string
+): number | null {
+  if (!stories.length) return null;
+
+  const stem = filename.replace(/\.[^.]+$/, "");
+  const haystack = tokenize(`${stem} ${contentText.slice(0, 1200)}`);
+  if (!haystack.length) return null;
+  const hayset = new Set(haystack);
+
+  let bestPosition: number | null = null;
+  let bestScore = 0;
+
+  for (const story of stories) {
+    const tokens = tokenize(
+      `${story.toc_title} ${story.title} ${story.eyebrow}`
+    );
+    if (!tokens.length) continue;
+    let hits = 0;
+    for (const token of tokens) {
+      if (hayset.has(token)) hits += 1;
+    }
+    const score = hits / tokens.length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestPosition = story.position;
+    }
+  }
+
+  // Require a clear overlap so we don't mis-attach.
+  return bestScore >= 0.34 && bestPosition != null ? bestPosition : null;
+}

@@ -12,6 +12,7 @@ import {
   markIssueSent,
   recordSend,
 } from "./db.js";
+import { resendReplyFields } from "./mail.js";
 import { loadTemplate, renderIssueEmail } from "./render.js";
 import { randomUUID } from "node:crypto";
 
@@ -152,6 +153,7 @@ export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
         to: subscriber.email,
         subject: issue.subject,
         html,
+        ...resendReplyFields(config),
         ...(logoAttachment ? { attachments: [logoAttachment] } : {}),
         headers: {
           "List-Unsubscribe": `<${config.appUrl}/unsubscribe/${subscriber.unsubscribe_token}>`,
@@ -232,6 +234,8 @@ export async function sendPreviewEmail(
     },
     appUrl: config.appUrl,
     logoDelivery: logoAttachment ? "cid" : "hosted",
+    // Preview emails are not personalized — avoid fake unsub/prefs tokens.
+    viewMode: "public",
   });
 
   if (config.dryRun) {
@@ -251,6 +255,7 @@ export async function sendPreviewEmail(
     to: email,
     subject: `[Preview] ${issue.subject}`,
     html,
+    ...resendReplyFields(config),
     ...(logoAttachment ? { attachments: [logoAttachment] } : {}),
     headers: {
       "X-Ebb-Flow-Preview": randomUUID(),

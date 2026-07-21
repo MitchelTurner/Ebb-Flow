@@ -74,7 +74,9 @@ const html = renderIssueEmail({
 assert.match(html, /Good morning, Alex\./);
 assert.match(html, /Story 1 title/);
 assert.match(html, /unsubscribe\/tok/);
+assert.match(html, /Update preferences/);
 assert.match(html, /\/brand\/logo\.png/);
+assert.match(html, /01 &nbsp;Story 1 toc/);
 assert.match(
   renderIssueEmail({
     issue,
@@ -127,6 +129,32 @@ assert.match(bareHtml, /\/brand\/logo\.png/);
 assert.doesNotMatch(bareHtml, /placehold\.co/);
 assert.doesNotMatch(bareHtml, /memorable quote/i);
 assert.doesNotMatch(bareHtml, /border-left:3px solid #b8975a/);
+
+// Fewer than 6 stories: empty slots collapse (no blank TOC / story rows).
+const shortStories = stories.slice(0, 3);
+const shortHtml = renderIssueEmail({
+  issue,
+  stories: shortStories,
+  subscriber: { first_name: "Alex", unsubscribe_token: "tok" },
+  appUrl: "http://localhost:3000",
+});
+assert.match(shortHtml, /Story 3 title/);
+assert.doesNotMatch(shortHtml, /id="story4"/);
+assert.doesNotMatch(shortHtml, /Story 4 toc/);
+assert.match(shortHtml, /03 &nbsp;Story 3 toc/);
+
+const publicHtml = renderIssueEmail({
+  issue: { ...issue, status: "sent" },
+  stories: shortStories,
+  subscriber: { first_name: "neighbor", unsubscribe_token: "preview" },
+  appUrl: "http://localhost:3000",
+  viewMode: "public",
+});
+assert.match(publicHtml, /\/archive\/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/);
+assert.match(publicHtml, />Subscribe</);
+assert.match(publicHtml, />Archive</);
+assert.doesNotMatch(publicHtml, /unsubscribe\/preview/);
+assert.doesNotMatch(publicHtml, /preferences\/preview/);
 
 mkdirSync(".preview", { recursive: true });
 const out = join(".preview", "smoke.html");

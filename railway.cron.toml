@@ -6,6 +6,7 @@
 #
 # IMPORTANT: on the *web* service set WEEKLY_CRON_ENABLED=false so Monday send
 # does not also fire inside the long-running web process.
+# (A Postgres advisory lock also prevents double-send if both runners fire.)
 
 [build]
 builder = "NIXPACKS"

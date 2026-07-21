@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import { resolveTemplatesDir } from "./assetPaths.js";
 import { brandLogoResendAttachment } from "./brandAssets.js";
 import type { AppConfig } from "./config.js";
+import { resendReplyFields } from "./mail.js";
 import { renderTemplate } from "./render.js";
 import type { Subscriber } from "./types.js";
 
@@ -32,6 +33,7 @@ export function renderSubscribeThankYouEmail(params: {
     greeting_name: name ? `, ${escapeHtml(name)}` : "",
     subscriber_email: escapeHtml(params.subscriber.email),
     unsubscribe_url: `${params.appUrl}/unsubscribe/${params.subscriber.unsubscribe_token}`,
+    archive_url: `${params.appUrl}/archive`,
     site_url: params.appUrl,
     site_url_label: escapeHtml(siteLabel),
     logo_url: params.logoUrl ?? `${params.appUrl}/brand/logo.png`,
@@ -84,6 +86,7 @@ export async function sendSubscribeThankYou(
       to: subscriber.email,
       subject,
       html,
+      ...resendReplyFields(config),
       ...(logoAttachment ? { attachments: [logoAttachment] } : {}),
       headers: {
         "List-Unsubscribe": `<${config.appUrl}/unsubscribe/${subscriber.unsubscribe_token}>`,

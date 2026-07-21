@@ -37,9 +37,35 @@ async function api(path, options = {}) {
   if (!res.ok) {
     const err = new Error(data.error || `Request failed (${res.status})`);
     err.status = res.status;
+    err.payload = data;
+    err.checklist = data.checklist;
     throw err;
   }
   return data;
+}
+
+function formatChecklistFailures(checklist) {
+  if (!checklist?.items?.length) return "";
+  const failed = checklist.items.filter((item) => !item.pass && item.required);
+  if (!failed.length) return checklist.ok ? "" : "Checklist incomplete.";
+  return failed.map((item) => `✗ ${item.label}`).join(" · ");
+}
+
+function renderChecklistInto(panel, checklist, title = "Editorial checklist") {
+  if (!(panel instanceof HTMLElement) || !checklist) {
+    if (panel instanceof HTMLElement) panel.innerHTML = "";
+    return;
+  }
+  panel.innerHTML = `<strong>${title}</strong> ${
+    checklist.ok ? '<span class="pass">ready</span>' : '<span class="fail">incomplete</span>'
+  }<ul>${checklist.items
+    .map(
+      (item) =>
+        `<li class="${item.pass ? "pass" : "fail"}">${item.pass ? "✓" : "✗"} ${escapeHtml(item.label)}${
+          item.required ? "" : " (optional)"
+        }</li>`
+    )
+    .join("")}</ul>`;
 }
 
 function flash(el, text, kind = "") {
@@ -98,6 +124,7 @@ async function bootstrap() {
 async function refreshAll() {
   await Promise.all([
     loadStats(),
+    loadOps(),
     loadSubscribers(),
     loadIssues(),
     loadReview(),
@@ -111,10 +138,13 @@ async function loadStats() {
   if (!statsEl) return;
   const items = [
     ["Active subscribers", stats.active_subscribers],
+    ["Bounced", stats.bounced_subscribers ?? 0],
     ["Unused transcripts", stats.unused_transcripts ?? 0],
     ["Drafts to review", stats.draft_issues],
     ["Scheduled", stats.scheduled_issues],
     ["Ready / due", stats.ready_issues],
+    ["Sent (7d)", stats.sent_7d ?? 0],
+    ["Failed (7d)", stats.failed_sends_7d ?? 0],
   ];
   statsEl.innerHTML = items
     .map(
@@ -177,6 +207,43 @@ async function runProposeTopics() {
   }
 }
 
+async function loadOps() {
+  const panel = document.getElementById("ops-panel");
+  if (!panel) return;
+  try {
+    const { ops, health } = await api("/api/admin/ops");
+    const pill = (ok, label) =>
+      `<span class="ops-pill ${ok ? "ok" : "warn"}">${ok ? "✓" : "!"} ${escapeHtml(label)}</span>`;
+    const failures = (ops.recent_failures || [])
+      .map(
+        (row) =>
+          `<li><strong>${escapeHtml(row.email)}</strong> · ${escapeHtml(row.subject)}<br><span class="muted">${escapeHtml(row.error || "failed")}</span></li>`
+      )
+      .join("");
+    panel.innerHTML = `
+      <p><strong>${ops.sent_7d}</strong> sent · <strong>${ops.failed_sends_7d}</strong> failed · <strong>${ops.bounced_subscribers}</strong> bounced · <strong>${ops.ready_due}</strong> due now</p>
+      <div class="ops-health">
+        ${pill(health.resend_configured, "Resend")}
+        ${pill(health.reply_to_configured, "Reply-To")}
+        ${pill(health.webhook_configured, "Bounce webhook")}
+        ${pill(health.cron_secret_configured, "Cron secret")}
+        ${pill(
+          !health.weekly_cron_in_process || health.cron_secret_configured,
+          health.weekly_cron_in_process
+            ? "In-process Monday cron (set WEEKLY_CRON_ENABLED=false if using Railway cron)"
+            : "In-process Monday cron off"
+        )}
+      </div>
+      ${
+        failures
+          ? `<p class="muted">Recent failures</p><ul class="fail-list">${failures}</ul>`
+          : `<p class="muted">No recent send failures.</p>`
+      }`;
+  } catch (err) {
+    panel.innerHTML = `<p class="fail">${escapeHtml(err.message)}</p>`;
+  }
+}
+
 async function loadChecklist(issueId) {
   const panel = document.getElementById("checklist-panel");
   if (!panel || !issueId) {
@@ -185,16 +252,7 @@ async function loadChecklist(issueId) {
   }
   try {
     const { checklist } = await api(`/api/admin/issues/${issueId}/checklist`);
-    panel.innerHTML = `<strong>Editorial checklist</strong> ${
-      checklist.ok ? '<span class="pass">ready</span>' : '<span class="fail">incomplete</span>'
-    }<ul>${checklist.items
-      .map(
-        (item) =>
-          `<li class="${item.pass ? "pass" : "fail"}">${item.pass ? "✓" : "✗"} ${escapeHtml(item.label)}${
-            item.required ? "" : " (optional)"
-          }</li>`
-      )
-      .join("")}</ul>`;
+    renderChecklistInto(panel, checklist);
   } catch {
     panel.innerHTML = "";
   }
@@ -487,9 +545,23 @@ document
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || "Upload failed.");
-      flash(`Added ${payload.file?.filename || "file"} to AI context.`, "ok");
+      const matched =
+        payload.file?.auto_matched && payload.file?.story_position
+          ? ` (matched story ${payload.file.story_position})`
+          : payload.file?.story_position
+            ? ` (story ${payload.file.story_position})`
+            : " (issue-wide)";
+      flash(
+        appFlash,
+        `Added ${payload.file?.filename || "file"} to AI context${matched}.`,
+        "ok"
+      );
       form.reset();
-      if (status) status.textContent = "";
+      if (status) {
+        status.textContent = payload.file?.auto_matched
+          ? `Auto-matched to story ${payload.file.story_position}.`
+          : "";
+      }
       await loadContextFiles(selectedIssueId);
       await loadStories(selectedIssueId);
     } catch (err) {
@@ -753,21 +825,34 @@ async function sendSelected(dryRun) {
     return;
   }
   if (!dryRun && !confirm("Send this issue to all active subscribers?")) return;
+  const forceEl = document.getElementById("send-force");
+  const force = forceEl instanceof HTMLInputElement && forceEl.checked;
+  const sendChecklistPanel = document.getElementById("send-checklist-panel");
   try {
-    const { result } = await api(`/api/admin/issues/${selectedIssueId}/send`, {
-      method: "POST",
-      body: JSON.stringify({ dry_run: dryRun }),
-    });
+    const { result, checklist } = await api(
+      `/api/admin/issues/${selectedIssueId}/send`,
+      {
+        method: "POST",
+        body: JSON.stringify({ dry_run: dryRun, force }),
+      }
+    );
+    renderChecklistInto(sendChecklistPanel, checklist, "Send checklist");
     flash(
       appFlash,
       dryRun
         ? `Dry run complete: ${result.skipped} skipped.`
-        : `Send complete: ${result.sent} sent, ${result.failed} failed.`,
+        : `Send complete: ${result.sent} sent, ${result.failed} failed${
+            result.skipped ? `, ${result.skipped} skipped` : ""
+          }.`,
       result.failed ? "err" : "ok"
     );
-    await Promise.all([loadIssues(), loadStats()]);
+    await Promise.all([loadIssues(), loadStats(), loadOps()]);
   } catch (err) {
-    flash(appFlash, err.message, "err");
+    if (err.checklist) {
+      renderChecklistInto(sendChecklistPanel, err.checklist, "Send blocked");
+    }
+    const detail = formatChecklistFailures(err.checklist);
+    flash(appFlash, detail ? `${err.message} ${detail}` : err.message, "err");
   }
 }
 
@@ -1012,6 +1097,11 @@ function renderFactReview(result) {
         ? `<p class="pass">Name gate: passed — every person-like name appears in transcript grounding.</p>`
         : "";
 
+  const confirmReady =
+    result.editor_confirm_ready ||
+    (result.ok && result.name_gate_ok !== false);
+  const alreadyConfirmed = Boolean(result.issue?.fact_reviewed_at);
+
   panel.innerHTML = `<h4>AI fact-check (transcripts + web + names)</h4>
     <p>${escapeHtml(result.summary || "")}${
       result.applied ? " Corrections were applied to the draft." : ""
@@ -1024,6 +1114,16 @@ function renderFactReview(result) {
             <button type="button" id="fact-review-apply-btn">Apply corrections</button>
           </div>`
         : ""
+    }
+    ${
+      confirmReady && !alreadyConfirmed
+        ? `<div class="row-actions spaced">
+            <button type="button" id="fact-review-confirm-btn">Confirm fact-check</button>
+            <span class="muted">Required before schedule / send.</span>
+          </div>`
+        : alreadyConfirmed
+          ? `<p class="pass">Editor confirmed — checklist fact-check item is ready.</p>`
+          : ""
     }`;
 }
 
@@ -1066,7 +1166,37 @@ document.getElementById("fact-review-btn")?.addEventListener("click", async () =
 
 document.getElementById("fact-review-panel")?.addEventListener("click", async (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLElement) || target.id !== "fact-review-apply-btn") return;
+  if (!(target instanceof HTMLElement)) return;
+
+  if (target.id === "fact-review-confirm-btn") {
+    if (!selectedIssueId) return;
+    target.setAttribute("disabled", "true");
+    try {
+      const result = await api(
+        `/api/admin/issues/${selectedIssueId}/confirm-fact-review`,
+        { method: "POST", body: "{}" }
+      );
+      fillIssueForm(result.issue);
+      renderFactReview({
+        ...result,
+        ok: true,
+        editor_confirm_ready: true,
+        name_gate_ok: true,
+        summary: "Editor confirmed fact-check.",
+        findings: [],
+        applied: false,
+      });
+      flash(appFlash, "Fact-check confirmed — you can schedule or send.", "ok");
+      await Promise.all([loadIssues(), loadReview()]);
+    } catch (err) {
+      flash(appFlash, err.message, "err");
+    } finally {
+      target.removeAttribute("disabled");
+    }
+    return;
+  }
+
+  if (target.id !== "fact-review-apply-btn") return;
   if (!selectedIssueId) return;
   flash(appFlash, "Applying fact-check corrections…", "");
   try {

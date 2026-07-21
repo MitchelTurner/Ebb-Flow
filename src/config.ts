@@ -64,7 +64,20 @@ export function getConfig() {
     databaseUrl: required("DATABASE_URL"),
     resendApiKey: optional("RESEND_API_KEY"),
     fromEmail: optional("FROM_EMAIL") ?? "The Ebb & Flow <onboarding@resend.dev>",
+    /**
+     * Tip / reply inbox. When set, Resend sets Reply-To so “just hit reply”
+     * reaches the newsroom instead of (or in addition to) FROM_EMAIL.
+     */
+    replyToEmail: optional("REPLY_TO_EMAIL") ?? optional("REPLY_TO"),
     appUrl: (optional("APP_URL") ?? "http://localhost:3000").replace(/\/$/, ""),
+    /** Soft cap for context file uploads (bytes). Default 25 MiB. */
+    contextUploadMaxBytes: process.env.CONTEXT_UPLOAD_MAX_BYTES
+      ? Number.parseInt(process.env.CONTEXT_UPLOAD_MAX_BYTES, 10)
+      : 25 * 1024 * 1024,
+    /** Soft cap for extracted upload text (chars). Default 1.5M. */
+    contextUploadMaxChars: process.env.CONTEXT_UPLOAD_MAX_CHARS
+      ? Number.parseInt(process.env.CONTEXT_UPLOAD_MAX_CHARS, 10)
+      : 1_500_000,
     adminPassword: optional("ADMIN_PASSWORD"),
     anthropicApiKey: resolveAnthropicApiKey(),
     /** Always Claude Fable 5 — not overridable. */

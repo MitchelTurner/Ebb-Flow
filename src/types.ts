@@ -31,7 +31,7 @@ export interface Issue {
   postal_address: string;
   status: IssueStatus;
   scheduled_for: string | null;
-  /** Set when AI fact-check against transcripts last passed/applied. */
+  /** Set when an editor confirms AI fact-check + scrub for schedule/send. */
   fact_reviewed_at: string | null;
   created_at?: string;
   updated_at?: string;
@@ -73,11 +73,30 @@ export type TemplateData = Record<string, string>;
 export interface DashboardStats {
   active_subscribers: number;
   total_subscribers: number;
+  bounced_subscribers: number;
   draft_issues: number;
   ready_issues: number;
   unused_transcripts: number;
   scheduled_issues: number;
+  failed_sends_7d: number;
+  sent_7d: number;
 }
+
+export type SendFailureRow = {
+  issue_id: string;
+  subject: string;
+  email: string;
+  error: string | null;
+  created_at: string;
+};
+
+export type SendOpsSnapshot = {
+  bounced_subscribers: number;
+  failed_sends_7d: number;
+  sent_7d: number;
+  ready_due: number;
+  recent_failures: SendFailureRow[];
+};
 
 export type ProposalTopic = {
   key: string;

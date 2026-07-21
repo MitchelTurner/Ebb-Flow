@@ -67,7 +67,7 @@
           <span>2</span><strong>Write</strong><em>Selected stories + marine strip</em>
         </li>
         <li class="workflow-step" data-goto-tab="issues" role="button" tabindex="0">
-          <span>3</span><strong>Check</strong><em>AI fact-check + checklist</em>
+          <span>3</span><strong>Check</strong><em>AI scrub + editor confirm</em>
         </li>
         <li class="workflow-step" data-goto-tab="review" role="button" tabindex="0">
           <span>4</span><strong>Schedule</strong><em>Approve delivery time</em>
@@ -75,6 +75,14 @@
       </ol>
 
       <div class="stats" id="stats"></div>
+
+      <div class="stack-block">
+        <div class="block-head">
+          <h3>Send ops</h3>
+          <p class="muted">Bounce health, recent delivery failures, and Monday runner status.</p>
+        </div>
+        <div id="ops-panel" class="ops-panel muted">Loading ops…</div>
+      </div>
 
       <div class="action-bar">
         <button type="button" id="overview-propose-btn">Propose topics</button>
@@ -282,6 +290,12 @@
             </div>
           </div>
 
+          <label class="check-row send-force-row">
+            <input type="checkbox" id="send-force">
+            <span>Force send even if checklist incomplete</span>
+          </label>
+          <div id="send-checklist-panel" class="checklist-panel muted"></div>
+
           <div id="fact-review-panel" class="fact-review-panel muted"></div>
 
           <div class="preview-email surface">
@@ -300,6 +314,7 @@
           <form id="context-upload-form" class="grid-form cols-2 surface">
             <label>Attach to
               <select name="story_position">
+                <option value="auto">Auto-match story</option>
                 <option value="issue">Whole issue</option>
                 <option value="1">Story 1 · Lead</option>
                 <option value="2">Story 2</option>
@@ -310,11 +325,12 @@
               </select>
             </label>
             <label>File
-              <input type="file" name="file" accept=".pdf,.txt,.md,.markdown,.csv,.html,.htm,.json,text/plain,application/pdf">
+              <input type="file" name="file" accept=".pdf,.docx,.txt,.md,.markdown,.csv,.html,.htm,.json,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
             </label>
             <div class="cols-span align-end">
               <button type="submit" class="secondary">Upload context</button>
             </div>
+            <p class="cols-span muted">Supported: PDF, DOCX, TXT, MD, CSV, HTML, JSON. Soft max ~25&nbsp;MB / 1.5M characters.</p>
             <p class="cols-span muted" id="context-upload-status"></p>
           </form>
           <div id="context-files-list" class="context-files-list"></div>

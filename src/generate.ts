@@ -32,6 +32,8 @@ export type FactReviewSaveResult = FactReviewResult & {
   stories: Story[];
   model: typeof CLAUDE_MODEL;
   name_gate_ok: boolean;
+  /** True when AI scrub finished cleanly and an editor may confirm. */
+  editor_confirm_ready: boolean;
 };
 
 function issueCopyFrom(issue: Issue, stories: Story[]): GeneratedIssueCopy {
@@ -189,7 +191,7 @@ export async function generateAndSaveIssue(
 
 /**
  * AI fact-check draft against transcript source notes + deterministic name gate.
- * Stamps fact_reviewed_at only when names pass after any applied corrections.
+ * Never stamps fact_reviewed_at — an editor must confirm after reviewing the scrub.
  */
 export async function factReviewAndMaybeApply(
   config: AppConfig,
@@ -319,16 +321,12 @@ export async function factReviewAndMaybeApply(
     workingIssue,
     await withContext(workingStories)
   );
-  // Stamp only when every person-like name is grounded. After apply/scrub, trust
-  // the corrected copy for non-name LLM findings; otherwise require review.ok.
+  // AI pass when names are grounded. After apply/scrub, trust the corrected copy
+  // for non-name LLM findings; otherwise require review.ok.
   const reviewOk = nameGate.ok && (applied || review.ok);
 
-  if (reviewOk) {
-    const stamped = await updateIssue(config.databaseUrl, issueId, {
-      fact_reviewed_at: new Date().toISOString(),
-    });
-    workingIssue = stamped ?? workingIssue;
-  } else if (workingIssue.fact_reviewed_at) {
+  // Always clear the editor stamp after an AI run — human must re-confirm.
+  if (workingIssue.fact_reviewed_at) {
     const cleared = await updateIssue(config.databaseUrl, issueId, {
       fact_reviewed_at: null,
     });
@@ -356,8 +354,8 @@ export async function factReviewAndMaybeApply(
     summary:
       summary ||
       (reviewOk
-        ? "Fact-check passed (transcripts, web, and name gate)."
-        : "Fact-check incomplete — fix remaining errors before scheduling."),
+        ? "AI fact-check passed (transcripts, web, and name gate). Confirm below before scheduling."
+        : "Fact-check incomplete — fix remaining errors, then confirm."),
     findings,
     corrected: review.corrected,
     applied,
@@ -365,6 +363,55 @@ export async function factReviewAndMaybeApply(
     stories: workingStories,
     model: CLAUDE_MODEL,
     name_gate_ok: nameGate.ok,
+    editor_confirm_ready: reviewOk,
+  };
+}
+
+/**
+ * Editor confirms AI fact-check + scrub. Stamps fact_reviewed_at when the name
+ * gate still passes on grounded stories.
+ */
+export async function confirmFactReview(
+  config: AppConfig,
+  issueId: string
+): Promise<{
+  ok: true;
+  issue: Issue;
+  stories: Story[];
+  name_gate_ok: true;
+}> {
+  const issue = await getIssueForSend(config.databaseUrl, issueId);
+  if (!issue) {
+    throw new Error(`Issue not found: ${issueId}`);
+  }
+  const stories = await getStories(config.databaseUrl, issueId);
+  if (!stories.length) {
+    throw new Error("Add stories before confirming fact-check.");
+  }
+  const grounded = await loadStoriesWithContext(
+    config.databaseUrl,
+    issueId,
+    stories
+  );
+  const nameGate = checkIssueNames(issue, grounded);
+  if (!nameGate.ok) {
+    throw new Error(
+      `Cannot confirm: ${nameGate.ungrounded.length} unsupported person name(s). Re-run AI fact-check.`
+    );
+  }
+
+  const stamped = await updateIssue(config.databaseUrl, issueId, {
+    fact_reviewed_at: new Date().toISOString(),
+  });
+  if (!stamped) {
+    throw new Error("Failed to stamp editor fact-check confirmation.");
+  }
+
+  return {
+    ok: true,
+    issue: stamped,
+    stories,
+    name_gate_ok: true,
   };
 }
 

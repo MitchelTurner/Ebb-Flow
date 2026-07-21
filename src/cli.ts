@@ -86,6 +86,7 @@ async function main(): Promise<void> {
             unsubscribe_token: "preview-token",
           },
           appUrl: config.appUrl,
+          viewMode: "public",
         });
         mkdirSync(".preview", { recursive: true });
         const out = join(".preview", `${issue.id}.html`);

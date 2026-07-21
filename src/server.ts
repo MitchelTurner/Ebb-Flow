@@ -49,6 +49,8 @@ export function createServer(config: AppConfig) {
       publicDirExists: existsSync(publicDir),
       brandLogo: Boolean(resolveBrandFile(BRAND_LOGO_FILE)),
       aiKeyConfigured: Boolean(config.anthropicApiKey),
+      replyToConfigured: Boolean(config.replyToEmail),
+      resendWebhookConfigured: Boolean(config.resendWebhookSecret),
       weeklyCronEnabled: config.weeklyCronEnabled,
       autoDraftOnBoot: config.autoDraftOnBoot,
     });
@@ -85,6 +87,7 @@ export function createServer(config: AppConfig) {
           unsubscribe_token: "preview",
         },
         appUrl: config.appUrl,
+        viewMode: "public",
       });
       res.type("html").send(html);
     } catch (err) {
@@ -157,6 +160,7 @@ export function createServer(config: AppConfig) {
           unsubscribe_token: "preview",
         },
         appUrl: config.appUrl,
+        viewMode: "public",
       });
       res.type("html").send(html);
     } catch (err) {

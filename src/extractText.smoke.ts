@@ -28,4 +28,17 @@ try {
 }
 assert.equal(failed, true);
 
+let oversized = false;
+try {
+  await extractTextFromUpload({
+    filename: "big.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("x".repeat(1000)),
+    maxChars: 100,
+  });
+} catch (err) {
+  oversized = err instanceof Error && /too large/i.test(err.message);
+}
+assert.equal(oversized, true);
+
 console.log("extractText.smoke ok");

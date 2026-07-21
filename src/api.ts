@@ -14,6 +14,7 @@ import {
   deleteContextFile,
   listContextFiles,
   loadStoriesWithContext,
+  matchStoryPositionForUpload,
 } from "./contextFiles.js";
 import {
   createIssue,
@@ -22,6 +23,7 @@ import {
   deleteSubscriber,
   getDashboardStats,
   getIssueForSend,
+  getSendOpsSnapshot,
   getStories,
   listIssues,
   listReviewIssues,
@@ -33,15 +35,14 @@ import {
   updateSubscriberStatusByEmail,
   upsertStory,
 } from "./db.js";
-import { ExtractTextError, extractTextFromUpload } from "./extractText.js";
+import {
+  ExtractTextError,
+  SUPPORTED_UPLOAD_FORMATS,
+  extractTextFromUpload,
+} from "./extractText.js";
 import { rateLimit } from "./rateLimit.js";
 import { bounceEmailsFromEvent, verifyResendWebhook } from "./webhooks.js";
 import { sendSubscribeThankYou } from "./welcome.js";
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { files: 1 },
-});
 import {
   createTranscript,
   deleteTranscript,
@@ -50,6 +51,7 @@ import {
 import { buildEditorialChecklist } from "./checklist.js";
 import {
   applyMarineAutofill,
+  confirmFactReview,
   factReviewAndMaybeApply,
   generateAndSaveIssue,
 } from "./generate.js";
@@ -78,6 +80,13 @@ export function createApiRouter(config: AppConfig): Router {
   const router = Router();
   const adminPassword = config.adminPassword;
   const guard = requireAdmin(adminPassword);
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      files: 1,
+      fileSize: Math.max(1_048_576, config.contextUploadMaxBytes || 25 * 1024 * 1024),
+    },
+  });
 
   router.get("/health", (_req, res) => {
     res.json({
@@ -214,6 +223,25 @@ export function createApiRouter(config: AppConfig): Router {
     try {
       const stats = await getDashboardStats(config.databaseUrl);
       res.json({ stats });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.get("/admin/ops", guard, async (_req, res) => {
+    try {
+      const ops = await getSendOpsSnapshot(config.databaseUrl);
+      res.json({
+        ops,
+        health: {
+          reply_to_configured: Boolean(config.replyToEmail),
+          resend_configured: Boolean(config.resendApiKey),
+          webhook_configured: Boolean(config.resendWebhookSecret),
+          weekly_cron_in_process: config.weeklyCronEnabled,
+          cron_secret_configured: Boolean(config.cronSecret),
+        },
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: message });
@@ -455,6 +483,24 @@ export function createApiRouter(config: AppConfig): Router {
     }
   });
 
+  router.post("/admin/issues/:id/confirm-fact-review", guard, async (req, res) => {
+    try {
+      const result = await confirmFactReview(config, req.params.id);
+      const checklist = buildEditorialChecklist(
+        result.issue,
+        await loadStoriesWithContext(
+          config.databaseUrl,
+          result.issue.id,
+          result.stories
+        )
+      );
+      res.json({ ...result, checklist });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(400).json({ ok: false, error: message });
+    }
+  });
+
   router.post("/admin/issues/:id/marine", guard, async (req, res) => {
     try {
       const force = req.body?.force !== false;
@@ -600,10 +646,19 @@ export function createApiRouter(config: AppConfig): Router {
 
         const rawPosition = String(req.body?.story_position ?? "").trim();
         let storyPosition: number | null = null;
-        if (rawPosition && rawPosition !== "all" && rawPosition !== "issue") {
+        let autoMatched = false;
+        if (
+          rawPosition &&
+          rawPosition !== "all" &&
+          rawPosition !== "issue" &&
+          rawPosition !== "auto"
+        ) {
           const n = Number(rawPosition);
           if (!Number.isInteger(n) || n < 1 || n > 6) {
-            badRequest(res, "story_position must be 1–6 or empty for issue-wide.");
+            badRequest(
+              res,
+              "story_position must be 1–6, auto, or empty for issue-wide."
+            );
             return;
           }
           storyPosition = n;
@@ -613,7 +668,21 @@ export function createApiRouter(config: AppConfig): Router {
           filename: file.originalname,
           mimeType: file.mimetype,
           buffer: file.buffer,
+          maxChars: config.contextUploadMaxChars,
         });
+
+        if (rawPosition === "auto") {
+          const stories = await getStories(config.databaseUrl, req.params.id);
+          const matched = matchStoryPositionForUpload(
+            stories,
+            file.originalname || "upload.txt",
+            contentText
+          );
+          if (matched != null) {
+            storyPosition = matched;
+            autoMatched = true;
+          }
+        }
 
         const saved = await createContextFile(config.databaseUrl, {
           issueId: req.params.id,
@@ -638,11 +707,23 @@ export function createApiRouter(config: AppConfig): Router {
             byte_size: saved.byte_size,
             char_count: saved.content_text.length,
             created_at: saved.created_at,
+            auto_matched: autoMatched,
           },
+          supported_formats: SUPPORTED_UPLOAD_FORMATS,
         });
       } catch (err) {
         if (err instanceof ExtractTextError) {
           badRequest(res, err.message);
+          return;
+        }
+        if (
+          err instanceof multer.MulterError &&
+          err.code === "LIMIT_FILE_SIZE"
+        ) {
+          badRequest(
+            res,
+            `File is too large (max ${Math.round(config.contextUploadMaxBytes / (1024 * 1024))} MB).`
+          );
           return;
         }
         const message = err instanceof Error ? err.message : String(err);

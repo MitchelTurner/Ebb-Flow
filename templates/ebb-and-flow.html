@@ -98,12 +98,7 @@
           <td style="padding:16px 20px; font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#16293a; font-weight:bold;">
             In this issue
             <div style="font-family:Georgia,serif; font-size:14px; line-height:24px; letter-spacing:0; text-transform:none; color:#3a352e; font-weight:normal; padding-top:8px;">
-              <a href="#story1" style="color:#3a352e; text-decoration:none;">01 &nbsp;{{story_1_toc_title}}</a><br>
-              <a href="#story2" style="color:#3a352e; text-decoration:none;">02 &nbsp;{{story_2_toc_title}}</a><br>
-              <a href="#story3" style="color:#3a352e; text-decoration:none;">03 &nbsp;{{story_3_toc_title}}</a><br>
-              <a href="#story4" style="color:#3a352e; text-decoration:none;">04 &nbsp;{{story_4_toc_title}}</a><br>
-              <a href="#story5" style="color:#3a352e; text-decoration:none;">05 &nbsp;{{story_5_toc_title}}</a><br>
-              <a href="#story6" style="color:#3a352e; text-decoration:none;">06 &nbsp;{{story_6_toc_title}}</a>
+              {{toc_html}}
             </div>
           </td>
         </tr>
@@ -111,121 +106,9 @@
     </td>
   </tr>
 
-  <!-- HERO: Top story -->
-  <tr>
-    <td class="px" style="padding:30px 40px 0 40px;" id="story1">
-      <div style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#a07d2f; font-weight:bold; padding-bottom:14px;">{{story_1_eyebrow}}</div>
-      {{story_1_image_html}}
-      <div style="padding-top:18px;">
-        <a href="{{story_1_url}}" class="hero-title" style="font-family:Georgia,serif; font-size:30px; line-height:36px; color:#1a1a1a; font-weight:bold; text-decoration:none;">{{story_1_title}}</a>
-        <div style="font-family:Georgia,serif; font-size:16px; line-height:26px; color:#5a544a; padding-top:10px;"><span style="float:left; font-family:Georgia,serif; font-size:52px; line-height:40px; color:#16293a; font-weight:bold; padding:4px 8px 0 0;">{{story_1_dropcap}}</span>{{story_1_summary_rest}}</div>
-        {{story_1_quote_html}}
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
-          <tbody><tr>
-            <td valign="top" style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; letter-spacing:1px; text-transform:uppercase; line-height:20px; color:#16293a; font-weight:bold; white-space:nowrap; padding-right:8px;">Why it matters:</td>
-            <td valign="top" style="font-family:Georgia,serif; font-size:13px; line-height:20px; color:#5a544a;">{{story_1_why_it_matters}}</td>
-          </tr>
-        </tbody></table>
-      </div>
-    </td>
-  </tr>
-
-  <!-- Section label -->
-  <tr>
-    <td class="px" style="padding:30px 40px 0 40px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tbody><tr>
-          <td style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:12px; letter-spacing:2px; text-transform:uppercase; color:#16293a; font-weight:bold; white-space:nowrap; padding-right:14px;">More Headlines</td>
-          <td width="100%" style="border-bottom:1px solid #d8c9a8; font-size:1px; line-height:1px;">&nbsp;</td>
-        </tr>
-      </tbody></table>
-    </td>
-  </tr>
-
-  <!-- Story 2 -->
-  <tr>
-    <td class="px" style="padding:22px 40px 22px 40px; border-bottom:1px solid #ede9e1;" id="story2">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tbody><tr>
-          <td valign="top" width="34" style="font-family:Georgia,serif; font-size:30px; line-height:30px; color:#b8975a; font-weight:bold;">02</td>
-          <td valign="top" style="padding-left:14px;">
-            <div style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#a07d2f; font-weight:bold; padding-bottom:5px;">{{story_2_eyebrow}}</div>
-            <a href="{{story_2_url}}" style="font-family:Georgia,serif; font-size:21px; line-height:27px; color:#1a1a1a; font-weight:bold; text-decoration:none;">{{story_2_title}}</a>
-            <div style="font-family:Georgia,serif; font-size:15px; line-height:24px; color:#5a544a; padding-top:6px;">{{story_2_summary}}</div>
-            <div style="font-family:Georgia,serif; font-size:13px; line-height:20px; color:#16293a; padding-top:8px;"><strong style="letter-spacing:0.4px;">Why it matters:</strong> <span style="color:#5a544a;">{{story_2_why_it_matters}}</span></div>
-          </td>
-        </tr>
-      </tbody></table>
-    </td>
-  </tr>
-
-  <!-- Story 3 -->
-  <tr>
-    <td class="px" style="padding:22px 40px 22px 40px; border-bottom:1px solid #ede9e1;" id="story3">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tbody><tr>
-          <td valign="top" width="34" style="font-family:Georgia,serif; font-size:30px; line-height:30px; color:#b8975a; font-weight:bold;">03</td>
-          <td valign="top" style="padding-left:14px;">
-            <div style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#a07d2f; font-weight:bold; padding-bottom:5px;">{{story_3_eyebrow}}</div>
-            <a href="{{story_3_url}}" style="font-family:Georgia,serif; font-size:21px; line-height:27px; color:#1a1a1a; font-weight:bold; text-decoration:none;">{{story_3_title}}</a>
-            <div style="font-family:Georgia,serif; font-size:15px; line-height:24px; color:#5a544a; padding-top:6px;">{{story_3_summary}}</div>
-            <div style="font-family:Georgia,serif; font-size:13px; line-height:20px; color:#16293a; padding-top:8px;"><strong style="letter-spacing:0.4px;">Why it matters:</strong> <span style="color:#5a544a;">{{story_3_why_it_matters}}</span></div>
-          </td>
-        </tr>
-      </tbody></table>
-    </td>
-  </tr>
-
-  <!-- Story 4 -->
-  <tr>
-    <td class="px" style="padding:22px 40px 22px 40px; border-bottom:1px solid #ede9e1;" id="story4">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tbody><tr>
-          <td valign="top" width="34" style="font-family:Georgia,serif; font-size:30px; line-height:30px; color:#b8975a; font-weight:bold;">04</td>
-          <td valign="top" style="padding-left:14px;">
-            <div style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#a07d2f; font-weight:bold; padding-bottom:5px;">{{story_4_eyebrow}}</div>
-            <a href="{{story_4_url}}" style="font-family:Georgia,serif; font-size:21px; line-height:27px; color:#1a1a1a; font-weight:bold; text-decoration:none;">{{story_4_title}}</a>
-            <div style="font-family:Georgia,serif; font-size:15px; line-height:24px; color:#5a544a; padding-top:6px;">{{story_4_summary}}</div>
-            <div style="font-family:Georgia,serif; font-size:13px; line-height:20px; color:#16293a; padding-top:8px;"><strong style="letter-spacing:0.4px;">Why it matters:</strong> <span style="color:#5a544a;">{{story_4_why_it_matters}}</span></div>
-          </td>
-        </tr>
-      </tbody></table>
-    </td>
-  </tr>
-
-  <!-- Story 5 -->
-  <tr>
-    <td class="px" style="padding:22px 40px 22px 40px; border-bottom:1px solid #ede9e1;" id="story5">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tbody><tr>
-          <td valign="top" width="34" style="font-family:Georgia,serif; font-size:30px; line-height:30px; color:#b8975a; font-weight:bold;">05</td>
-          <td valign="top" style="padding-left:14px;">
-            <div style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#a07d2f; font-weight:bold; padding-bottom:5px;">{{story_5_eyebrow}}</div>
-            <a href="{{story_5_url}}" style="font-family:Georgia,serif; font-size:21px; line-height:27px; color:#1a1a1a; font-weight:bold; text-decoration:none;">{{story_5_title}}</a>
-            <div style="font-family:Georgia,serif; font-size:15px; line-height:24px; color:#5a544a; padding-top:6px;">{{story_5_summary}}</div>
-            <div style="font-family:Georgia,serif; font-size:13px; line-height:20px; color:#16293a; padding-top:8px;"><strong style="letter-spacing:0.4px;">Why it matters:</strong> <span style="color:#5a544a;">{{story_5_why_it_matters}}</span></div>
-          </td>
-        </tr>
-      </tbody></table>
-    </td>
-  </tr>
-
-  <!-- Story 6 -->
-  <tr>
-    <td class="px" style="padding:22px 40px 26px 40px;" id="story6">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tbody><tr>
-          <td valign="top" width="34" style="font-family:Georgia,serif; font-size:30px; line-height:30px; color:#b8975a; font-weight:bold;">06</td>
-          <td valign="top" style="padding-left:14px;">
-            <div style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#a07d2f; font-weight:bold; padding-bottom:5px;">{{story_6_eyebrow}}</div>
-            <a href="{{story_6_url}}" style="font-family:Georgia,serif; font-size:21px; line-height:27px; color:#1a1a1a; font-weight:bold; text-decoration:none;">{{story_6_title}}</a>
-            <div style="font-family:Georgia,serif; font-size:15px; line-height:24px; color:#5a544a; padding-top:6px;">{{story_6_summary}}</div>
-            <div style="font-family:Georgia,serif; font-size:13px; line-height:20px; color:#16293a; padding-top:8px;"><strong style="letter-spacing:0.4px;">Why it matters:</strong> <span style="color:#5a544a;">{{story_6_why_it_matters}}</span></div>
-          </td>
-        </tr>
-      </tbody></table>
-    </td>
-  </tr>
+  <!-- HERO + secondary stories (empty slots omitted) -->
+  {{story_1_section_html}}
+  {{more_headlines_html}}
 
   <!-- Coming up next week -->
   <tr>
@@ -266,7 +149,7 @@
         <tr><td align="center" style="font-family:Georgia,serif; font-size:12px; line-height:20px; color:#807a70;">
           {{postal_address}}<br>
           You're receiving this because you subscribed to the weekly dispatch.<br>
-          <a href="{{view_in_browser_url}}" style="color:#b8975a; text-decoration:underline;">View in browser</a> &nbsp;·&nbsp; <a href="{{preferences_url}}" style="color:#b8975a; text-decoration:underline;">Update preferences</a> &nbsp;·&nbsp; <a href="{{unsubscribe_url}}" style="color:#b8975a; text-decoration:underline;">Unsubscribe</a>
+          <a href="{{view_in_browser_url}}" style="color:#b8975a; text-decoration:underline;">View in browser</a> &nbsp;·&nbsp; <a href="{{preferences_url}}" style="color:#b8975a; text-decoration:underline;">{{preferences_label}}</a> &nbsp;·&nbsp; <a href="{{unsubscribe_url}}" style="color:#b8975a; text-decoration:underline;">{{unsubscribe_label}}</a>
         </td></tr>
       </tbody></table>
     </td>
