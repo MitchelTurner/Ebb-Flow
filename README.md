@@ -102,15 +102,15 @@ If you ever see `relation "subscribers" does not exist`, redeploy the web servic
 
 ## Editorial workflow
 
-1. Add **Transcripts** (meeting / interview text) in Admin → Transcripts, or insert into the `transcripts` table. Short tip-style **Findings** are a fallback when no unused transcripts exist.
-2. Claude Fable 5 **refines** those transcripts into digestible topics (split/merge as needed), autofills **Ketchikan weather + NOAA tides**, and drafts a review issue for the email template (on boot, `/cron/auto-draft`, or Admin → Draft from newest transcripts).
-3. In **Review & schedule**, preview the draft, edit if needed, then **Approve & schedule** a delivery time. Use **Autofill weather & tides** on an issue to refresh marine fields anytime.
-4. Cron `POST /cron/send` (or `npm run start:send`) delivers due `ready` issues when `scheduled_for` has passed.
-5. After send, status becomes `sent`.
+1. Add **Transcripts** in Admin → Transcripts (or insert into `transcripts`). Findings are a fallback.
+2. Click **Propose topics** — Claude suggests digestible topics (deduped vs recent issues) with source grounding; weather/tides are autofilled for review.
+3. Select topics → **Write selected topics** to create the draft issue. Or use **Quick draft** to skip the review step.
+4. Check the **editorial checklist**, use **Email me a preview**, then **Approve & schedule**.
+5. Cron `POST /cron/send` delivers due `ready` issues.
 
-Draft source priority: `transcripts` table → other public tables named like `%transcript%` / `%recording%` → `findings`.
+Draft source priority: `transcripts` → `%transcript%` / `%recording%` tables → `findings`.
 
-Weather uses Open-Meteo; tides use NOAA CO-OPS station `9450460` (Ketchikan). Override with `MARINE_LATITUDE`, `MARINE_LONGITUDE`, `MARINE_TIMEZONE`, `TIDE_STATION_ID`.
+Weather: Open-Meteo (includes “as of” time). Tides: NOAA `9450460` (Ketchikan). Override with `MARINE_*` / `TIDE_STATION_ID`.
 
 ### Claude auto-write
 

@@ -18,6 +18,7 @@ import {
   deleteSubscriber,
   deleteTask,
   getDashboardStats,
+  getIssueForSend,
   getStories,
   listFindings,
   listIssues,
@@ -36,12 +37,26 @@ import {
   deleteTranscript,
   listTranscripts,
 } from "./sources.js";
+import { buildEditorialChecklist } from "./checklist.js";
 import {
   applyMarineAutofill,
   generateAndSaveIssue,
 } from "./generate.js";
-import { sendNewsletter } from "./send.js";
-import type { IssueStatus, SubscriberStatus, TaskStatus } from "./types.js";
+import {
+  acceptTopicProposal,
+  discardProposal,
+  getProposal,
+  listPendingProposals,
+  proposeTopicsFromNewestSources,
+  saveProposalTopics,
+} from "./proposals.js";
+import { sendNewsletter, sendPreviewEmail } from "./send.js";
+import type {
+  IssueStatus,
+  ProposalTopic,
+  SubscriberStatus,
+  TaskStatus,
+} from "./types.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -377,6 +392,36 @@ export function createApiRouter(config: AppConfig): Router {
     }
   });
 
+  router.post("/admin/issues/:id/preview-email", guard, async (req, res) => {
+    try {
+      const to = String(req.body?.to ?? "").trim();
+      if (!to) {
+        badRequest(res, "to email is required.");
+        return;
+      }
+      const result = await sendPreviewEmail(config, req.params.id, to);
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, error: message });
+    }
+  });
+
+  router.get("/admin/issues/:id/checklist", guard, async (req, res) => {
+    try {
+      const issue = await getIssueForSend(config.databaseUrl, req.params.id);
+      if (!issue) {
+        res.status(404).json({ error: "Issue not found" });
+        return;
+      }
+      const stories = await getStories(config.databaseUrl, issue.id);
+      res.json({ checklist: buildEditorialChecklist(issue, stories) });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
   router.post("/admin/issues/:id/schedule", guard, async (req, res) => {
     try {
       const scheduledFor = String(req.body?.scheduled_for ?? "").trim();
@@ -384,6 +429,22 @@ export function createApiRouter(config: AppConfig): Router {
         badRequest(res, "scheduled_for must be a valid datetime.");
         return;
       }
+
+      const current = await getIssueForSend(config.databaseUrl, req.params.id);
+      if (!current) {
+        res.status(404).json({ error: "Issue not found or not schedulable" });
+        return;
+      }
+      const stories = await getStories(config.databaseUrl, current.id);
+      const checklist = buildEditorialChecklist(current, stories);
+      if (!checklist.ok && !req.body?.force) {
+        res.status(400).json({
+          error: "Editorial checklist incomplete. Fix items or pass force=true.",
+          checklist,
+        });
+        return;
+      }
+
       const issue = await scheduleIssue(
         config.databaseUrl,
         req.params.id,
@@ -393,7 +454,7 @@ export function createApiRouter(config: AppConfig): Router {
         res.status(404).json({ error: "Issue not found or not schedulable" });
         return;
       }
-      res.json({ issue });
+      res.json({ issue, checklist });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: message });
@@ -509,6 +570,94 @@ export function createApiRouter(config: AppConfig): Router {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ ok: false, error: message });
+    }
+  });
+
+  router.get("/admin/proposals", guard, async (_req, res) => {
+    try {
+      const proposals = await listPendingProposals(config.databaseUrl);
+      res.json({ proposals });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/admin/proposals", guard, async (_req, res) => {
+    try {
+      const result = await proposeTopicsFromNewestSources(config);
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, error: message });
+    }
+  });
+
+  router.get("/admin/proposals/:id", guard, async (req, res) => {
+    try {
+      const proposal = await getProposal(config.databaseUrl, req.params.id);
+      if (!proposal) {
+        res.status(404).json({ error: "Proposal not found" });
+        return;
+      }
+      res.json({ proposal });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.patch("/admin/proposals/:id", guard, async (req, res) => {
+    try {
+      const topics = req.body?.topics as ProposalTopic[] | undefined;
+      if (!Array.isArray(topics)) {
+        badRequest(res, "topics array is required.");
+        return;
+      }
+      const proposal = await saveProposalTopics(
+        config.databaseUrl,
+        req.params.id,
+        topics
+      );
+      if (!proposal) {
+        res.status(404).json({ error: "Proposal not found or not pending" });
+        return;
+      }
+      res.json({ proposal });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/admin/proposals/:id/accept", guard, async (req, res) => {
+    try {
+      const topicKeys = Array.isArray(req.body?.topic_keys)
+        ? req.body.topic_keys.map(String)
+        : undefined;
+      const result = await acceptTopicProposal(config, req.params.id, topicKeys);
+      if (!result.accepted) {
+        res.status(400).json({ ok: false, error: result.reason });
+        return;
+      }
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, error: message });
+    }
+  });
+
+  router.post("/admin/proposals/:id/discard", guard, async (req, res) => {
+    try {
+      const ok = await discardProposal(config.databaseUrl, req.params.id);
+      if (!ok) {
+        res.status(404).json({ error: "Proposal not found or not pending" });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
     }
   });
 

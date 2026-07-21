@@ -99,6 +99,7 @@ async function refreshAll() {
     loadIssues(),
     loadTasks(),
     loadReview(),
+    loadProposals(),
     loadTranscripts(),
     loadFindings(),
   ]);
@@ -127,7 +128,7 @@ async function loadStats() {
 async function runAutoDraft() {
   flash(
     appFlash,
-    "Refining transcripts into topics + autofilling weather & tides…",
+    "Quick draft: refining topics + autofilling weather & tides…",
     ""
   );
   try {
@@ -153,10 +154,113 @@ async function runAutoDraft() {
   }
 }
 
+async function runProposeTopics() {
+  flash(appFlash, "Proposing digestible topics from newest transcripts…", "");
+  try {
+    const result = await api("/api/admin/proposals", {
+      method: "POST",
+      body: "{}",
+    });
+    if (!result.proposed) {
+      flash(appFlash, result.reason || "Nothing to propose.", "err");
+      return;
+    }
+    flash(
+      appFlash,
+      `Proposed ${result.proposal.topics.length} topics from ${result.sourceCount} sources — select & write.`,
+      "ok"
+    );
+    selectTab("review");
+    await refreshAll();
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  }
+}
+
+async function loadChecklist(issueId) {
+  const panel = document.getElementById("checklist-panel");
+  if (!panel || !issueId) {
+    if (panel) panel.innerHTML = "";
+    return;
+  }
+  try {
+    const { checklist } = await api(`/api/admin/issues/${issueId}/checklist`);
+    panel.innerHTML = `<strong>Editorial checklist</strong> ${
+      checklist.ok ? '<span class="pass">ready</span>' : '<span class="fail">incomplete</span>'
+    }<ul>${checklist.items
+      .map(
+        (item) =>
+          `<li class="${item.pass ? "pass" : "fail"}">${item.pass ? "✓" : "✗"} ${escapeHtml(item.label)}${
+            item.required ? "" : " (optional)"
+          }</li>`
+      )
+      .join("")}</ul>`;
+  } catch {
+    panel.innerHTML = "";
+  }
+}
+
+async function loadProposals() {
+  const host = document.getElementById("proposals-list");
+  if (!host) return;
+  const { proposals } = await api("/api/admin/proposals");
+  if (!proposals.length) {
+    host.innerHTML = `<p class="muted">No pending topic proposals. Click <strong>Propose topics</strong> to start.</p>`;
+    return;
+  }
+  host.innerHTML = proposals
+    .map((proposal) => {
+      const marine = proposal.marine || {};
+      const when = proposal.created_at
+        ? new Date(proposal.created_at).toLocaleString()
+        : "";
+      const topics = (proposal.topics || [])
+        .map(
+          (topic) => `<div class="proposal-topic">
+            <input type="checkbox" data-proposal-id="${proposal.id}" data-topic-key="${topic.key}" ${
+              topic.selected !== false ? "checked" : ""
+            }>
+            <div>
+              <strong>${escapeHtml(topic.title)}</strong>
+              <div class="muted">${escapeHtml(topic.eyebrow || "")}</div>
+              <p>${escapeHtml(topic.summary || "")}</p>
+              <details class="grounding"><summary>Source grounding</summary><pre style="white-space:pre-wrap;margin:0.35rem 0 0">${escapeHtml(
+                topic.source_notes || "—"
+              )}</pre></details>
+            </div>
+          </div>`
+        )
+        .join("");
+      return `<article class="proposal-card" data-proposal="${proposal.id}">
+        <h4>Proposal · ${escapeHtml(when)}</h4>
+        <p class="muted">${escapeHtml(marine.weather || "Weather pending")} · tides ${escapeHtml(
+          marine.high_tides || "—"
+        )} / ${escapeHtml(marine.low_tides || "—")}</p>
+        ${topics}
+        <div class="row-actions" style="margin-top:0.75rem">
+          <button type="button" data-proposal-accept="${proposal.id}">Write selected topics</button>
+          <button type="button" class="secondary" data-proposal-discard="${proposal.id}">Discard</button>
+        </div>
+      </article>`;
+    })
+    .join("");
+}
+
 async function loadReview() {
   const { issues } = await api("/api/admin/review");
   const body = document.getElementById("review-body");
   const select = document.getElementById("schedule-issue-select");
+  const checklistCache = {};
+  await Promise.all(
+    issues.map(async (issue) => {
+      try {
+        const { checklist } = await api(`/api/admin/issues/${issue.id}/checklist`);
+        checklistCache[issue.id] = checklist;
+      } catch {
+        checklistCache[issue.id] = null;
+      }
+    })
+  );
   if (body) {
     body.innerHTML = issues.length
       ? issues
@@ -164,9 +268,17 @@ async function loadReview() {
             const scheduled = issue.scheduled_for
               ? new Date(issue.scheduled_for).toLocaleString()
               : "—";
+            const checklist = checklistCache[issue.id];
+            const checkLabel = checklist
+              ? checklist.ok
+                ? "ready"
+                : "incomplete"
+              : "—";
+            const checkClass = checklist?.ok ? "ready" : "draft";
             return `<tr>
               <td>${escapeHtml(issue.subject)}</td>
               <td><span class="badge ${escapeHtml(issue.status)}">${escapeHtml(issue.status)}</span></td>
+              <td><span class="badge ${checkClass}">${checkLabel}</span></td>
               <td>${escapeHtml(scheduled)}</td>
               <td class="row-actions">
                 <button type="button" class="secondary" data-review-edit="${issue.id}">Review</button>
@@ -175,7 +287,7 @@ async function loadReview() {
             </tr>`;
           })
           .join("")
-      : `<tr><td colspan="4" class="muted">No drafts yet. Add transcripts, then draft with Claude.</td></tr>`;
+      : `<tr><td colspan="5" class="muted">No drafts yet. Propose topics from transcripts, then write.</td></tr>`;
   }
   if (select instanceof HTMLSelectElement) {
     select.innerHTML = issues
@@ -185,6 +297,7 @@ async function loadReview() {
           `<option value="${issue.id}">${escapeHtml(issue.subject)} (${issue.status})</option>`
       )
       .join("");
+    if (select.value) await loadChecklist(select.value);
   }
 }
 
@@ -388,12 +501,19 @@ async function loadStories(issueId) {
           (story) => `<div class="story-item">
             <h3>0${story.position} · ${escapeHtml(story.title)}</h3>
             <div class="muted">${escapeHtml(story.eyebrow || "")}</div>
+            <p>${escapeHtml(story.summary || "")}</p>
             ${
-              story.source_notes
-                ? `<p class="muted"><strong>Notes:</strong> ${escapeHtml(story.source_notes)}</p>`
+              story.why_it_matters
+                ? `<p class="muted"><em>${escapeHtml(story.why_it_matters)}</em></p>`
                 : ""
             }
-            <p>${escapeHtml(story.summary || "")}</p>
+            ${
+              story.source_notes
+                ? `<details class="grounding" open><summary>Source grounding</summary><pre style="white-space:pre-wrap;margin:0.35rem 0 0">${escapeHtml(
+                    story.source_notes
+                  )}</pre></details>`
+                : `<p class="muted">No source grounding on this story.</p>`
+            }
             <div class="row-actions">
               <button type="button" class="secondary" data-story-edit='${escapeAttr(JSON.stringify(story))}'>Edit</button>
               <button type="button" class="danger" data-story-delete="${story.id}">Delete</button>
@@ -599,6 +719,56 @@ document.getElementById("send-live-btn")?.addEventListener("click", () => sendSe
 
 document.getElementById("overview-auto-draft-btn")?.addEventListener("click", runAutoDraft);
 document.getElementById("review-auto-draft-btn")?.addEventListener("click", runAutoDraft);
+document.getElementById("overview-propose-btn")?.addEventListener("click", runProposeTopics);
+document.getElementById("review-propose-btn")?.addEventListener("click", runProposeTopics);
+
+document.getElementById("schedule-issue-select")?.addEventListener("change", (event) => {
+  const select = event.currentTarget;
+  if (select instanceof HTMLSelectElement) loadChecklist(select.value);
+});
+
+document.getElementById("proposals-list")?.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  if (target.dataset.proposalAccept) {
+    const proposalId = target.dataset.proposalAccept;
+    const keys = [
+      ...document.querySelectorAll(
+        `input[type="checkbox"][data-proposal-id="${proposalId}"]:checked`
+      ),
+    ].map((el) => el.getAttribute("data-topic-key"));
+    flash(appFlash, "Writing full draft from selected topics…", "");
+    try {
+      const result = await api(`/api/admin/proposals/${proposalId}/accept`, {
+        method: "POST",
+        body: JSON.stringify({ topic_keys: keys }),
+      });
+      flash(appFlash, "Draft written — review checklist, then schedule.", "ok");
+      await refreshAll();
+      if (result.result?.issue) {
+        selectTab("issues");
+        fillIssueForm(result.result.issue);
+      }
+    } catch (err) {
+      flash(appFlash, err.message, "err");
+    }
+    return;
+  }
+
+  if (target.dataset.proposalDiscard) {
+    if (!confirm("Discard this topic proposal?")) return;
+    try {
+      await api(`/api/admin/proposals/${target.dataset.proposalDiscard}/discard`, {
+        method: "POST",
+        body: "{}",
+      });
+      await loadProposals();
+    } catch (err) {
+      flash(appFlash, err.message, "err");
+    }
+  }
+});
 
 document.getElementById("review-body")?.addEventListener("click", async (event) => {
   const target = event.target;
@@ -624,6 +794,7 @@ document.getElementById("schedule-form")?.addEventListener("submit", async (even
   const data = new FormData(form);
   const issueId = String(data.get("issue_select") ?? "");
   const local = String(data.get("scheduled_for") ?? "");
+  const force = Boolean(data.get("force"));
   if (!issueId || !local) {
     flash(appFlash, "Pick an issue and delivery time.", "err");
     return;
@@ -632,12 +803,39 @@ document.getElementById("schedule-form")?.addEventListener("submit", async (even
   try {
     await api(`/api/admin/issues/${issueId}/schedule`, {
       method: "POST",
-      body: JSON.stringify({ scheduled_for }),
+      body: JSON.stringify({ scheduled_for, force }),
     });
     flash(appFlash, "Issue approved and scheduled.", "ok");
     await refreshAll();
   } catch (err) {
     flash(appFlash, err.message, "err");
+    await loadChecklist(issueId);
+  }
+});
+
+document.getElementById("preview-email-btn")?.addEventListener("click", async () => {
+  if (!selectedIssueId) {
+    flash(appFlash, "Save or open an issue first.", "err");
+    return;
+  }
+  const input = document.getElementById("preview-email-input");
+  const to = input instanceof HTMLInputElement ? input.value.trim() : "";
+  if (!to) {
+    flash(appFlash, "Enter your email for the preview.", "err");
+    return;
+  }
+  const btn = document.getElementById("preview-email-btn");
+  if (btn instanceof HTMLButtonElement) btn.disabled = true;
+  try {
+    const result = await api(`/api/admin/issues/${selectedIssueId}/preview-email`, {
+      method: "POST",
+      body: JSON.stringify({ to }),
+    });
+    flash(appFlash, `Preview sent to ${result.to}.`, "ok");
+  } catch (err) {
+    flash(appFlash, err.message, "err");
+  } finally {
+    if (btn instanceof HTMLButtonElement) btn.disabled = false;
   }
 });
 

@@ -5,6 +5,8 @@ export type MarineConditions = {
   high_tides: string;
   low_tides: string;
   high_tide_label: string;
+  /** ISO timestamp when conditions were fetched. */
+  as_of: string;
 };
 
 const WMO_LABELS: Record<number, string> = {
@@ -95,7 +97,9 @@ function addDaysYyyymmdd(yyyymmdd: string, days: number): string {
   return `${yyyy}${mm}${dd}`;
 }
 
-async function fetchWeather(config: AppConfig): Promise<string> {
+async function fetchWeather(
+  config: AppConfig
+): Promise<{ line: string; observedAt: string | null }> {
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(config.marineLatitude));
   url.searchParams.set("longitude", String(config.marineLongitude));
@@ -113,6 +117,7 @@ async function fetchWeather(config: AppConfig): Promise<string> {
   }
   const data = (await res.json()) as {
     current?: {
+      time?: string;
       temperature_2m?: number;
       weather_code?: number;
       wind_speed_10m?: number;
@@ -128,7 +133,11 @@ async function fetchWeather(config: AppConfig): Promise<string> {
   const label = WMO_LABELS[current.weather_code ?? -1] ?? "Local conditions";
   const windSpeed = Math.round(current.wind_speed_10m ?? 0);
   const windDir = windDirLabel(current.wind_direction_10m ?? 0);
-  return `${temp}°F · ${label} · Wind ${windDir} ${windSpeed} mph`;
+  const asOfClock = current.time ? formatClock(current.time.replace("T", " ")) : "";
+  const line = asOfClock
+    ? `${temp}°F · ${label} · Wind ${windDir} ${windSpeed} mph · as of ${asOfClock}`
+    : `${temp}°F · ${label} · Wind ${windDir} ${windSpeed} mph`;
+  return { line, observedAt: current.time ?? null };
 }
 
 type TidePoint = { t: string; v: string; type: string };
@@ -195,11 +204,12 @@ export async function fetchMarineConditions(
 
   const firstHigh = tides.find((p) => p.type === "H");
   return {
-    weather,
+    weather: weather.line,
     high_tides: formatTideTimes(tides, "H") || "—",
     low_tides: formatTideTimes(tides, "L") || "—",
     high_tide_label: firstHigh
       ? formatHighTideLabel(firstHigh.t)
       : "High tide —",
+    as_of: weather.observedAt ?? new Date().toISOString(),
   };
 }

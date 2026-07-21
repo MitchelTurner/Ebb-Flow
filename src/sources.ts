@@ -305,7 +305,7 @@ export async function discoverExternalTranscripts(
      FROM information_schema.tables
      WHERE table_schema = 'public'
        AND table_type = 'BASE TABLE'
-       AND table_name NOT IN ('transcripts', 'findings', 'source_usage', 'stories', 'issues', 'subscribers', 'sends', 'tasks')
+       AND table_name NOT IN ('transcripts', 'findings', 'source_usage', 'stories', 'issues', 'subscribers', 'sends', 'tasks', 'topic_proposals')
        AND (
          table_name ILIKE '%transcript%'
          OR table_name ILIKE '%recording%'

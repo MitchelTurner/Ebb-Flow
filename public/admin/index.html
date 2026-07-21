@@ -50,26 +50,37 @@
 
     <section id="panel-overview" class="panel" data-panel="overview">
       <div class="stats" id="stats"></div>
-      <p class="muted">Claude Fable 5 refines unused <strong>transcripts</strong> into digestible topics, autofills Ketchikan weather &amp; tides, and drafts a review email.</p>
-      <div class="toolbar" style="margin-top:1rem">
-        <button type="button" id="overview-auto-draft-btn">Draft from newest transcripts</button>
+      <p class="muted">Propose topics from transcripts for review, then write the draft. Weather &amp; tides autofill for Ketchikan.</p>
+      <div class="toolbar" style="margin-top:1rem; display:flex; flex-wrap:wrap; gap:0.5rem">
+        <button type="button" id="overview-propose-btn">Propose topics</button>
+        <button type="button" class="secondary" id="overview-auto-draft-btn">Quick draft (skip review)</button>
       </div>
     </section>
 
     <section id="panel-review" class="panel hidden" data-panel="review">
       <div class="section-head">
         <h2>Review &amp; schedule</h2>
-        <button type="button" id="review-auto-draft-btn">Draft from newest transcripts</button>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem">
+          <button type="button" id="review-propose-btn">Propose topics</button>
+          <button type="button" class="secondary" id="review-auto-draft-btn">Quick draft</button>
+        </div>
       </div>
-      <p class="muted">Claude drafts stay in <strong>draft</strong> until you schedule delivery. Cron sends when <code>scheduled_for</code> is due.</p>
+
+      <h3 style="margin-top:1rem">Topic proposals</h3>
+      <p class="muted">Select topics to keep, then write the full draft. Near-duplicates of recent issues are filtered when proposing.</p>
+      <div id="proposals-list" class="proposals-list"></div>
+
+      <h3 style="margin-top:1.5rem">Drafts</h3>
+      <p class="muted">Claude drafts stay in <strong>draft</strong> until the checklist passes and you schedule delivery.</p>
       <div style="overflow:auto">
         <table>
           <thead>
-            <tr><th>Subject</th><th>Status</th><th>Scheduled</th><th>Actions</th></tr>
+            <tr><th>Subject</th><th>Status</th><th>Checklist</th><th>Scheduled</th><th>Actions</th></tr>
           </thead>
           <tbody id="review-body"></tbody>
         </table>
       </div>
+      <div id="checklist-panel" class="checklist-panel muted" style="margin-top:0.75rem"></div>
       <form id="schedule-form" class="grid-form cols-3" style="margin-top:1rem">
         <input type="hidden" name="issue_id">
         <label>Issue to schedule
@@ -79,6 +90,10 @@
           <input type="datetime-local" name="scheduled_for" required>
         </label>
         <label>&nbsp;<button type="submit">Approve &amp; schedule</button></label>
+        <label class="cols-span" style="display:flex; align-items:center; gap:0.5rem">
+          <input type="checkbox" name="force" id="schedule-force">
+          Force schedule even if checklist incomplete
+        </label>
       </form>
     </section>
 
@@ -204,6 +219,14 @@
             <button type="button" class="secondary" id="autofill-marine-btn">Autofill weather &amp; tides</button>
             <button type="button" class="secondary" id="send-dry-btn">Dry-run send</button>
             <button type="button" id="send-live-btn">Send now</button>
+          </div>
+          <div class="grid-form cols-2" style="grid-column:1/-1; margin-top:0.5rem">
+            <label>Email me a preview
+              <input type="email" id="preview-email-input" placeholder="you@example.com">
+            </label>
+            <label>&nbsp;
+              <button type="button" class="secondary" id="preview-email-btn">Send preview to me</button>
+            </label>
           </div>
         </form>
 
