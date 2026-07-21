@@ -83,6 +83,8 @@ export function buildTemplateData(params: {
     email_subject: escapeHtml(issue.subject),
     preheader: escapeHtml(issue.preheader),
     view_in_browser_url: `${appUrl}/preview/${issue.id}`,
+    /** Light mark on navy masthead — transparent PNG for email clients. */
+    logo_url: `${appUrl}/brand/logo-mark-light-128.png`,
     issue_date_label: escapeHtml(formatIssueDateLabel(issue.issue_date)),
     volume_label: escapeHtml(issue.volume_label),
     high_tide_label: escapeHtml(issue.high_tide_label),

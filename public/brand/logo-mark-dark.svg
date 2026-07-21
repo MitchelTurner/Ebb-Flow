@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" role="img" aria-label="The Ebb and Flow">
+  <!-- Transparent background. Dark mark for light surfaces. -->
+  <g fill="#16293a">
+    <!-- Water / reflection -->
+    <path d="M28 138c18-10 36-8 54-2 16 5 28 4 44-3 18-8 34-7 52 1 12 5 22 4 34-2v12c-14 8-28 9-44 2-16-6-30-5-46 3-18 9-34 8-52 0-14-6-28-7-42 0v-11z"/>
+    <!-- Hull left -->
+    <path d="M36 118 L96 78 L120 118 Z"/>
+    <!-- Hull right -->
+    <path d="M204 118 L144 78 L120 118 Z"/>
+    <!-- Center sail / peak -->
+    <path d="M96 78 L120 38 L144 78 Z"/>
+  </g>
+  <!-- Fold highlight (matches reference white slit) -->
+  <path d="M112 48 L120 38 L122 52 L114 70 Z" fill="#f7f3ec" fill-opacity="0.92"/>
+</svg>

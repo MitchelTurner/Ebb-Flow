@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 200" fill="none" role="img" aria-label="The Ebb and Flow">
+  <g fill="#16293a">
+    <path d="M30 150c20-12 40-10 58-2 18 7 30 5 48-4 20-10 38-8 56 2 14 7 26 5 38-2v14c-16 9-32 10-50 2-18-8-34-6-52 4-20 11-38 9-58-1-16-8-30-9-40-1v-12z"/>
+    <path d="M42 128 L100 92 L120 128 Z"/>
+    <path d="M198 128 L140 92 L120 128 Z"/>
+    <path d="M100 92 L120 58 L140 92 Z"/>
+  </g>
+  <!-- Quill feather mast -->
+  <g stroke="#16293a" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M120 58 C128 40, 142 22, 168 12" stroke-width="3"/>
+    <path d="M126 48 C140 36, 154 28, 164 18" stroke-width="1.6"/>
+    <path d="M124 54 C138 44, 150 36, 160 26" stroke-width="1.6"/>
+    <path d="M122 42 C134 30, 148 22, 158 14" stroke-width="1.4"/>
+  </g>
+  <path d="M112 64 L120 58 L122 70 L114 84 Z" fill="#f7f3ec"/>
+</svg>

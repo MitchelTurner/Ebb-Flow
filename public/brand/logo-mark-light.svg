@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" role="img" aria-label="The Ebb and Flow">
+  <!-- Transparent background. Light mark for dark/navy surfaces. -->
+  <g fill="#f7f3ec">
+    <path d="M28 138c18-10 36-8 54-2 16 5 28 4 44-3 18-8 34-7 52 1 12 5 22 4 34-2v12c-14 8-28 9-44 2-16-6-30-5-46 3-18 9-34 8-52 0-14-6-28-7-42 0v-11z"/>
+    <path d="M36 118 L96 78 L120 118 Z"/>
+    <path d="M204 118 L144 78 L120 118 Z"/>
+    <path d="M96 78 L120 38 L144 78 Z"/>
+  </g>
+  <path d="M112 48 L120 38 L122 52 L114 70 Z" fill="#b8975a"/>
+  <!-- Soft gold edge accents for contrast on navy -->
+  <path d="M96 78 L120 38 L144 78" stroke="#b8975a" stroke-width="2.5" stroke-linejoin="round" fill="none" opacity="0.85"/>
+  <path d="M36 118 L96 78 L120 118 M204 118 L144 78 L120 118" stroke="#b8975a" stroke-width="1.5" stroke-linejoin="round" fill="none" opacity="0.55"/>
+</svg>

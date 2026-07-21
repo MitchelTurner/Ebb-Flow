@@ -69,6 +69,7 @@ const html = renderIssueEmail({
 assert.match(html, /Good morning, Alex\./);
 assert.match(html, /Story 1 title/);
 assert.match(html, /unsubscribe\/tok/);
+assert.match(html, /\/brand\/logo-mark-light-128\.png/);
 assert.doesNotMatch(html, /\{\{[a-z0-9_|]+\}\}/i);
 
 mkdirSync(".preview", { recursive: true });

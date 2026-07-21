@@ -199,6 +199,18 @@ body {
   }
 }
 
+.brand-mark {
+  display: block;
+  width: clamp(4.5rem, 16vw, 5.75rem);
+  height: auto;
+  margin: 0 0 var(--space-3);
+  background: transparent;
+}
+.brand-mark-light {
+  /* Cream/gold mark — contrasts on the dark hero stage */
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
+}
+
 .brand {
   margin: 0;
   font-family: var(--serif);

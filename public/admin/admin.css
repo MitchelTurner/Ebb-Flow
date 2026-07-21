@@ -108,6 +108,26 @@ code {
   }
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.brand-mark {
+  display: block;
+  width: 2.75rem;
+  height: auto;
+  flex: 0 0 auto;
+  background: transparent;
+}
+
+.login-box .brand-mark {
+  width: 4.5rem;
+  margin: 0 auto var(--space-3);
+}
+
 .brand {
   margin: 0;
   font-family: var(--serif);
