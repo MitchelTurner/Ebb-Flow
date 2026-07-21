@@ -82,7 +82,7 @@ export function buildEditorialChecklist(
     },
     {
       id: "fact_review",
-      label: "Editor confirmed fact-check (after AI scrub)",
+      label: "Fact-check confirmed (AI scrub + Send, or Confirm)",
       pass: Boolean(issue.fact_reviewed_at) && nameGate.ok,
       required: true,
     },

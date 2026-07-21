@@ -190,13 +190,20 @@ export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
   }
 
   if (!config.dryRun) {
-    if (result.failed === 0) {
+    if (result.sent > 0) {
+      // Archive as soon as any recipient got the issue. Failed addresses stay
+      // retriable via already-sent skip on a later run if needed.
       await markIssueSent(config.databaseUrl, issue.id);
-    } else {
-      // Leave retriable: already-sent recipients are skipped next run.
+      if (result.failed > 0) {
+        console.warn(
+          `Issue ${issue.id} archived with ${result.sent} sent and ${result.failed} failure(s)`
+        );
+      }
+    } else if (result.failed > 0) {
+      // Nothing delivered — leave ready for retry.
       await markIssueReadyForRetry(config.databaseUrl, issue.id);
       console.warn(
-        `Issue ${issue.id} had ${result.failed} failure(s); re-queued as ready for retry`
+        `Issue ${issue.id} had ${result.failed} failure(s) and 0 sent; re-queued as ready`
       );
     }
   }

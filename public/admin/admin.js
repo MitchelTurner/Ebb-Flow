@@ -176,9 +176,13 @@ async function runAutoDraft() {
       `Draft ready — ${topics} topic${topics === 1 ? "" : "s"} from ${sources} source${sources === 1 ? "" : "s"} (weather & tides filled).`,
       "ok"
     );
-    selectTab("review");
     await refreshAll();
-    if (draft.result?.issue) fillIssueForm(draft.result.issue);
+    if (draft.result?.issue) {
+      selectTab("issues");
+      fillIssueForm(draft.result.issue);
+    } else {
+      selectTab("desk");
+    }
   } catch (err) {
     flash(appFlash, err.message, "err");
   }
@@ -200,7 +204,7 @@ async function runProposeTopics() {
       `Proposed ${result.proposal.topics.length} topics from ${result.sourceCount} sources — select & write.`,
       "ok"
     );
-    selectTab("review");
+    selectTab("desk");
     await refreshAll();
   } catch (err) {
     flash(appFlash, err.message, "err");
@@ -224,13 +228,14 @@ async function loadOps() {
       <p><strong>${ops.sent_7d}</strong> sent · <strong>${ops.failed_sends_7d}</strong> failed · <strong>${ops.bounced_subscribers}</strong> bounced · <strong>${ops.ready_due}</strong> due now</p>
       <div class="ops-health">
         ${pill(health.resend_configured, "Resend")}
+        ${pill(!health.dry_run, health.dry_run ? "DRY_RUN on (blocks live send)" : "Live send mode")}
         ${pill(health.reply_to_configured, "Reply-To")}
         ${pill(health.webhook_configured, "Bounce webhook")}
         ${pill(health.cron_secret_configured, "Cron secret")}
         ${pill(
           !health.weekly_cron_in_process || health.cron_secret_configured,
           health.weekly_cron_in_process
-            ? "In-process Monday cron (set WEEKLY_CRON_ENABLED=false if using Railway cron)"
+            ? "In-process Monday cron"
             : "In-process Monday cron off"
         )}
       </div>
@@ -339,7 +344,7 @@ async function loadReview() {
               <td><span class="badge ${checkClass}">${checkLabel}</span></td>
               <td>${escapeHtml(scheduled)}</td>
               <td class="row-actions">
-                <button type="button" class="secondary" data-review-edit="${issue.id}">Review</button>
+                <button type="button" class="secondary" data-review-edit="${issue.id}">Open &amp; send</button>
                 <a class="btn secondary" href="/preview/${issue.id}" target="_blank" rel="noopener">Preview</a>
               </td>
             </tr>`;
@@ -824,35 +829,63 @@ async function sendSelected(dryRun) {
     flash(appFlash, "Save the issue before sending.", "err");
     return;
   }
-  if (!dryRun && !confirm("Send this issue to all active subscribers?")) return;
+  if (
+    !dryRun &&
+    !confirm(
+      "Send this issue to all active subscribers?\n\nAfter a successful send it will appear in the public archive."
+    )
+  ) {
+    return;
+  }
   const forceEl = document.getElementById("send-force");
   const force = forceEl instanceof HTMLInputElement && forceEl.checked;
   const sendChecklistPanel = document.getElementById("send-checklist-panel");
+  const sendBtn = document.getElementById("send-live-btn");
+  if (!dryRun && sendBtn instanceof HTMLButtonElement) sendBtn.disabled = true;
   try {
-    const { result, checklist } = await api(
-      `/api/admin/issues/${selectedIssueId}/send`,
-      {
-        method: "POST",
-        body: JSON.stringify({ dry_run: dryRun, force }),
-      }
-    );
+    const data = await api(`/api/admin/issues/${selectedIssueId}/send`, {
+      method: "POST",
+      body: JSON.stringify({ dry_run: dryRun, force }),
+    });
+    const { result, checklist, archived, archive_url: archiveUrl } = data;
     renderChecklistInto(sendChecklistPanel, checklist, "Send checklist");
-    flash(
-      appFlash,
-      dryRun
-        ? `Dry run complete: ${result.skipped} skipped.`
-        : `Send complete: ${result.sent} sent, ${result.failed} failed${
-            result.skipped ? `, ${result.skipped} skipped` : ""
-          }.`,
-      result.failed ? "err" : "ok"
-    );
-    await Promise.all([loadIssues(), loadStats(), loadOps()]);
+    if (dryRun || result?.dryRun) {
+      flash(
+        appFlash,
+        `Dry run only — nothing delivered or archived (${result?.skipped ?? 0} would-skip).`,
+        "err"
+      );
+    } else if (!result?.sent) {
+      flash(appFlash, "No emails were sent — issue was not archived.", "err");
+    } else if (result.failed > 0) {
+      flash(
+        appFlash,
+        `Sent ${result.sent}, ${result.failed} failed.${
+          archived ? " Issue is in the archive." : ""
+        }`,
+        "err"
+      );
+    } else {
+      flash(
+        appFlash,
+        `Sent ${result.sent} email${result.sent === 1 ? "" : "s"}.${
+          archived
+            ? ` Live in archive: ${archiveUrl || "/archive"}`
+            : " Refresh archive if it doesn’t show yet."
+        }`,
+        "ok"
+      );
+    }
+    if (data.issue) fillIssueForm(data.issue);
+    await Promise.all([loadIssues(), loadStats(), loadOps(), loadReview()]);
   } catch (err) {
     if (err.checklist) {
       renderChecklistInto(sendChecklistPanel, err.checklist, "Send blocked");
     }
     const detail = formatChecklistFailures(err.checklist);
-    flash(appFlash, detail ? `${err.message} ${detail}` : err.message, "err");
+    flash(appFlash, detail ? `${err.message} — ${detail}` : err.message, "err");
+  } finally {
+    if (sendBtn instanceof HTMLButtonElement) sendBtn.disabled = false;
   }
 }
 

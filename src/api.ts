@@ -55,6 +55,7 @@ import {
   factReviewAndMaybeApply,
   generateAndSaveIssue,
 } from "./generate.js";
+import { checkIssueNames } from "./nameCheck.js";
 import {
   acceptTopicProposal,
   discardProposal,
@@ -240,6 +241,7 @@ export function createApiRouter(config: AppConfig): Router {
           webhook_configured: Boolean(config.resendWebhookSecret),
           weekly_cron_in_process: config.weeklyCronEnabled,
           cron_secret_configured: Boolean(config.cronSecret),
+          dry_run: config.dryRun,
         },
       });
     } catch (err) {
@@ -352,11 +354,16 @@ export function createApiRouter(config: AppConfig): Router {
           return;
         }
       }
+      const current = await getIssueForSend(config.databaseUrl, req.params.id);
+      if (!current) {
+        res.status(404).json({ error: "Issue not found" });
+        return;
+      }
       const payload = { ...req.body };
       if (payload.coming_up !== undefined) {
         payload.coming_up = normalizeComingUp(payload.coming_up);
       }
-      // Editing newsletter copy invalidates the prior fact-check stamp.
+      // Only clear the fact-check stamp when copy actually changed.
       const copyKeys = [
         "subject",
         "preheader",
@@ -365,12 +372,22 @@ export function createApiRouter(config: AppConfig): Router {
         "volume_label",
         "tip_headline",
         "tip_body",
-      ];
-      if (
-        payload.fact_reviewed_at === undefined &&
-        copyKeys.some((key) => Object.prototype.hasOwnProperty.call(payload, key))
-      ) {
-        payload.fact_reviewed_at = null;
+      ] as const;
+      if (payload.fact_reviewed_at === undefined) {
+        const copyChanged = copyKeys.some((key) => {
+          if (!Object.prototype.hasOwnProperty.call(payload, key)) return false;
+          const nextVal = payload[key];
+          const prevVal = current[key];
+          if (key === "coming_up") {
+            return (
+              JSON.stringify(nextVal ?? []) !== JSON.stringify(prevVal ?? [])
+            );
+          }
+          return String(nextVal ?? "") !== String(prevVal ?? "");
+        });
+        if (copyChanged) {
+          payload.fact_reviewed_at = null;
+        }
       }
       const issue = await updateIssue(config.databaseUrl, req.params.id, payload);
       if (!issue) {
@@ -533,22 +550,52 @@ export function createApiRouter(config: AppConfig): Router {
   router.post("/admin/issues/:id/send", guard, async (req, res) => {
     try {
       const dryRun = Boolean(req.body?.dry_run);
-      const current = await getIssueForSend(config.databaseUrl, req.params.id);
+      // Live Send must not be silently swallowed by server DRY_RUN.
+      if (!dryRun && config.dryRun) {
+        res.status(400).json({
+          ok: false,
+          error:
+            "Server DRY_RUN=true — emails will not be delivered or archived. Turn off DRY_RUN on Railway, or use Dry-run for a test render.",
+        });
+        return;
+      }
+      if (!dryRun && !config.resendApiKey) {
+        res.status(400).json({
+          ok: false,
+          error:
+            "RESEND_API_KEY is not set — cannot send. Add it on the Railway web service and redeploy.",
+        });
+        return;
+      }
+
+      let current = await getIssueForSend(config.databaseUrl, req.params.id);
       if (!current) {
         res.status(404).json({ ok: false, error: "Issue not found" });
         return;
       }
-      const stories = await loadStoriesWithContext(
+      let stories = await loadStoriesWithContext(
         config.databaseUrl,
         current.id,
         await getStories(config.databaseUrl, current.id)
       );
+
+      // Clicking Send is editor confirmation when the name gate already passes.
+      if (!dryRun && !current.fact_reviewed_at) {
+        const names = checkIssueNames(current, stories);
+        if (names.ok) {
+          const stamped = await updateIssue(config.databaseUrl, current.id, {
+            fact_reviewed_at: new Date().toISOString(),
+          });
+          if (stamped) current = stamped;
+        }
+      }
+
       const checklist = buildEditorialChecklist(current, stories);
       if (!dryRun && !checklist.ok && !req.body?.force) {
         res.status(400).json({
           ok: false,
           error:
-            "Editorial checklist incomplete (including name grounding). Fix items or pass force=true.",
+            "Not ready to send. Fix the checklist items below, then try again.",
           checklist,
         });
         return;
@@ -563,9 +610,39 @@ export function createApiRouter(config: AppConfig): Router {
       const result = await sendNewsletter({
         ...config,
         issueId: req.params.id,
-        dryRun: dryRun || config.dryRun,
+        dryRun,
       });
-      res.json({ ok: true, result, checklist });
+
+      const issued = await getIssueForSend(config.databaseUrl, req.params.id);
+      const archived = issued?.status === "sent";
+      const archiveUrl = archived
+        ? `${config.appUrl}/archive/${req.params.id}`
+        : `${config.appUrl}/archive`;
+
+      if (!dryRun && result.sent === 0) {
+        res.status(502).json({
+          ok: false,
+          error:
+            result.failed > 0
+              ? `Send failed for all recipients (${result.failed}). Nothing was archived.`
+              : "No emails were sent (no active subscribers, or all already received this issue).",
+          result,
+          checklist,
+          issue: issued,
+          archived: false,
+          archive_url: archiveUrl,
+        });
+        return;
+      }
+
+      res.json({
+        ok: true,
+        result,
+        checklist,
+        issue: issued,
+        archived,
+        archive_url: archiveUrl,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ ok: false, error: message });

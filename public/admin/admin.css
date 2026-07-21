@@ -916,8 +916,52 @@ tbody tr:hover { background: rgba(232, 238, 243, 0.03); }
   border-bottom: 1px solid rgba(238, 243, 246, 0.08);
   font-size: 0.82rem;
 }
-.send-force-row {
-  margin: 0.35rem 0 0.75rem;
+.publish-strip {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  border: 1px solid rgba(184, 151, 90, 0.35);
+  background: linear-gradient(
+    180deg,
+    rgba(184, 151, 90, 0.08),
+    rgba(238, 243, 246, 0.02)
+  );
+}
+.publish-strip h3 {
+  margin: 0 0 0.35rem;
+  font-family: var(--serif);
+  font-size: 1.25rem;
+}
+.publish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+.publish-advanced {
+  margin-top: 0.25rem;
+}
+.publish-advanced summary {
+  cursor: pointer;
+  color: var(--mute);
+  font-size: 0.85rem;
+}
+.publish-advanced-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+details.stack-block > summary.block-head {
+  cursor: pointer;
+  list-style: none;
+}
+details.stack-block > summary.block-head::-webkit-details-marker {
+  display: none;
+}
+details.stack-block[open] > summary.block-head {
+  margin-bottom: var(--space-3);
 }
 .checklist-panel {
   margin-bottom: var(--space-3);

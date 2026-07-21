@@ -43,169 +43,156 @@
     </header>
 
     <nav class="tabs" role="tablist" aria-label="Admin sections">
-      <button class="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
-      <button class="tab" type="button" data-tab="review" aria-selected="false">Review</button>
-      <button class="tab" type="button" data-tab="transcripts" aria-selected="false">Transcripts</button>
-      <button class="tab" type="button" data-tab="subscribers" aria-selected="false">Subscribers</button>
-      <button class="tab" type="button" data-tab="issues" aria-selected="false">Emails</button>
+      <button class="tab" type="button" data-tab="desk" aria-selected="true">Desk</button>
+      <button class="tab" type="button" data-tab="issues" aria-selected="false">Issue</button>
+      <button class="tab" type="button" data-tab="people" aria-selected="false">People</button>
     </nav>
 
     <p class="flash toast" id="app-flash" role="status"></p>
 
-    <section id="panel-overview" class="panel" data-panel="overview">
+    <section id="panel-desk" class="panel" data-panel="desk">
       <div class="hero-block">
         <p class="eyebrow">This week</p>
-        <h2 class="hero-title">Turn transcripts into a sendable issue</h2>
-        <p class="lede">Propose topics, write the draft, fact-check against the web, then schedule.</p>
+        <h2 class="hero-title">Write, check, send</h2>
+        <p class="lede">One path: draft the issue, run AI fact-check, then <strong>Send now</strong>. Sent issues appear in the public archive.</p>
       </div>
 
       <ol class="workflow" aria-label="Publishing workflow">
-        <li class="workflow-step" data-goto-tab="review" role="button" tabindex="0">
+        <li class="workflow-step" data-goto-tab="desk" role="button" tabindex="0">
           <span>1</span><strong>Propose</strong><em>Topics from transcripts</em>
         </li>
         <li class="workflow-step" data-goto-tab="issues" role="button" tabindex="0">
-          <span>2</span><strong>Write</strong><em>Selected stories + marine strip</em>
+          <span>2</span><strong>Write</strong><em>Stories + weather</em>
         </li>
         <li class="workflow-step" data-goto-tab="issues" role="button" tabindex="0">
-          <span>3</span><strong>Check</strong><em>AI scrub + editor confirm</em>
-        </li>
-        <li class="workflow-step" data-goto-tab="review" role="button" tabindex="0">
-          <span>4</span><strong>Schedule</strong><em>Approve delivery time</em>
+          <span>3</span><strong>Send</strong><em>Live email → archive</em>
         </li>
       </ol>
 
       <div class="stats" id="stats"></div>
 
-      <div class="stack-block">
-        <div class="block-head">
-          <h3>Send ops</h3>
-          <p class="muted">Bounce health, recent delivery failures, and Monday runner status.</p>
-        </div>
-        <div id="ops-panel" class="ops-panel muted">Loading ops…</div>
-      </div>
-
       <div class="action-bar">
         <button type="button" id="overview-propose-btn">Propose topics</button>
         <button type="button" class="secondary" id="overview-auto-draft-btn">Quick draft</button>
-        <button type="button" class="secondary" data-goto-tab="review">Go to review</button>
-      </div>
-    </section>
-
-    <section id="panel-review" class="panel hidden" data-panel="review">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Desk</p>
-          <h2>Review &amp; schedule</h2>
-        </div>
-        <div class="action-bar compact">
-          <button type="button" id="review-propose-btn">Propose topics</button>
-          <button type="button" class="secondary" id="review-auto-draft-btn">Quick draft</button>
-        </div>
+        <button type="button" class="secondary" data-goto-tab="issues">Open issue</button>
+        <a class="btn secondary" href="/archive" target="_blank" rel="noopener">Public archive</a>
       </div>
 
       <div class="stack-block">
         <div class="block-head">
           <h3>Topic proposals</h3>
-          <p class="muted">Select topics to keep, then write the full draft. Near-duplicates of recent issues are filtered.</p>
+          <p class="muted">Select topics, then write the full draft.</p>
         </div>
         <div id="proposals-list" class="proposals-list"></div>
       </div>
 
       <div class="stack-block">
         <div class="block-head">
-          <h3>Draft queue</h3>
-          <p class="muted">Stay in <strong>draft</strong> until the checklist passes and you schedule delivery.</p>
+          <h3>Drafts</h3>
+          <p class="muted">Open a draft → fact-check → <strong>Send now</strong> on the Issue tab. Schedule is optional (Monday cron).</p>
         </div>
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th>Subject</th><th>Status</th><th>Checklist</th><th>Scheduled</th><th>Actions</th></tr>
+              <tr><th>Subject</th><th>Status</th><th>Ready?</th><th>Scheduled</th><th></th></tr>
             </thead>
             <tbody id="review-body"></tbody>
           </table>
         </div>
       </div>
 
-      <div class="stack-block schedule-block">
-        <div class="block-head">
-          <h3>Approve &amp; schedule</h3>
-          <p class="muted">Pick a draft, confirm the checklist, set delivery time.</p>
-        </div>
+      <details class="stack-block schedule-block">
+        <summary class="block-head">
+          <h3>Optional: schedule for Monday cron</h3>
+          <p class="muted">Only if you are not using Send now.</p>
+        </summary>
         <div id="checklist-panel" class="checklist-panel muted"></div>
         <form id="schedule-form" class="grid-form cols-3">
           <input type="hidden" name="issue_id">
-          <label>Issue to schedule
+          <label>Issue
             <select name="issue_select" id="schedule-issue-select"></select>
           </label>
           <label>Deliver at
             <input type="datetime-local" name="scheduled_for" required>
           </label>
           <label class="align-end"><span class="sr-only">Submit</span>
-            <button type="submit">Approve &amp; schedule</button>
+            <button type="submit">Schedule</button>
           </label>
           <label class="check-row cols-span">
             <input type="checkbox" name="force" id="schedule-force">
             <span>Force schedule even if checklist incomplete</span>
           </label>
         </form>
-      </div>
+      </details>
+
+      <details class="stack-block">
+        <summary class="block-head">
+          <h3>Send ops</h3>
+          <p class="muted">Delivery health</p>
+        </summary>
+        <div id="ops-panel" class="ops-panel muted">Loading ops…</div>
+      </details>
     </section>
 
-    <section id="panel-transcripts" class="panel hidden" data-panel="transcripts">
+    <section id="panel-people" class="panel hidden" data-panel="people">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Sources</p>
-          <h2>Transcripts</h2>
+          <p class="eyebrow">Audience &amp; sources</p>
+          <h2>People</h2>
         </div>
       </div>
-      <p class="muted">Paste meeting or interview text. Unused newest rows feed topic proposals and drafts.</p>
-      <form id="transcript-form" class="grid-form cols-2 surface">
-        <label>Title <input name="title" placeholder="Optional short label"></label>
-        <label>Source <input name="source" placeholder="City Council · July 14"></label>
-        <label class="cols-span">Transcript
-          <textarea name="content" required placeholder="Full transcript text Claude should analyze…"></textarea>
-        </label>
-        <label>Speaker <input name="speaker" placeholder="Optional"></label>
-        <label>Recorded at <input type="datetime-local" name="recorded_at"></label>
-        <div class="align-end"><button type="submit">Add transcript</button></div>
-      </form>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr><th>When</th><th>Transcript</th><th>Used?</th><th></th></tr>
-          </thead>
-          <tbody id="transcripts-body"></tbody>
-        </table>
-      </div>
-    </section>
 
-    <section id="panel-subscribers" class="panel hidden" data-panel="subscribers">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Audience</p>
-          <h2>Subscribers</h2>
+      <div class="stack-block">
+        <div class="block-head">
+          <h3>Subscribers</h3>
+          <p class="muted">Active list receives Send now.</p>
+        </div>
+        <form class="grid-form cols-3 surface" id="add-subscriber-form">
+          <label>First name <input name="first_name" placeholder="Alex"></label>
+          <label>Email <input name="email" type="email" required placeholder="alex@example.com"></label>
+          <label class="align-end"><span class="sr-only">Add</span><button type="submit">Add subscriber</button></label>
+        </form>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Email</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="subscribers-body"></tbody>
+          </table>
         </div>
       </div>
-      <form class="grid-form cols-3 surface" id="add-subscriber-form">
-        <label>First name <input name="first_name" placeholder="Alex"></label>
-        <label>Email <input name="email" type="email" required placeholder="alex@example.com"></label>
-        <label class="align-end"><span class="sr-only">Add</span><button type="submit">Add subscriber</button></label>
-      </form>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr><th>Name</th><th>Email</th><th>Status</th><th>Actions</th></tr>
-          </thead>
-          <tbody id="subscribers-body"></tbody>
-        </table>
+
+      <div class="stack-block">
+        <div class="block-head">
+          <h3>Transcripts</h3>
+          <p class="muted">Paste meeting text for topic proposals.</p>
+        </div>
+        <form id="transcript-form" class="grid-form cols-2 surface">
+          <label>Title <input name="title" placeholder="Optional short label"></label>
+          <label>Source <input name="source" placeholder="City Council · July 14"></label>
+          <label class="cols-span">Transcript
+            <textarea name="content" required placeholder="Full transcript text Claude should analyze…"></textarea>
+          </label>
+          <label>Speaker <input name="speaker" placeholder="Optional"></label>
+          <label>Recorded at <input type="datetime-local" name="recorded_at"></label>
+          <div class="align-end"><button type="submit">Add transcript</button></div>
+        </form>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>When</th><th>Transcript</th><th>Used?</th><th></th></tr>
+            </thead>
+            <tbody id="transcripts-body"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
     <section id="panel-issues" class="panel hidden" data-panel="issues">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Production</p>
-          <h2>Email issues</h2>
+          <p class="eyebrow">Publish</p>
+          <h2>Issue</h2>
         </div>
         <button type="button" id="new-issue-btn">New issue</button>
       </div>
@@ -229,6 +216,28 @@
 
         <form id="issue-form" class="issue-form">
           <input type="hidden" name="id">
+
+          <div class="publish-strip surface" id="publish-strip">
+            <div>
+              <h3>Publish</h3>
+              <p class="muted">Fact-check, then <strong>Send now</strong>. Successful sends appear in <a href="/archive" target="_blank" rel="noopener">/archive</a>.</p>
+            </div>
+            <div class="publish-actions">
+              <button type="button" class="secondary" id="fact-review-btn">AI fact-check</button>
+              <button type="button" id="send-live-btn">Send now</button>
+            </div>
+            <div id="send-checklist-panel" class="checklist-panel muted cols-span"></div>
+            <details class="cols-span publish-advanced">
+              <summary>Advanced</summary>
+              <div class="publish-advanced-row">
+                <button type="button" class="secondary" id="send-dry-btn">Dry-run (no email)</button>
+                <label class="check-row">
+                  <input type="checkbox" id="send-force">
+                  <span>Force send if checklist incomplete</span>
+                </label>
+              </div>
+            </details>
+          </div>
 
           <div class="field-group">
             <h3>Basics</h3>
@@ -272,6 +281,28 @@
             </div>
           </div>
 
+          <div class="publish-strip surface" id="publish-strip">
+            <div>
+              <h3>Publish</h3>
+              <p class="muted">Fact-check, then send to all active subscribers. Successful sends land in <a href="/archive" target="_blank" rel="noopener">/archive</a>.</p>
+            </div>
+            <div class="publish-actions">
+              <button type="button" class="secondary" id="fact-review-btn">AI fact-check</button>
+              <button type="button" id="send-live-btn">Send now</button>
+            </div>
+            <div id="send-checklist-panel" class="checklist-panel muted cols-span"></div>
+            <details class="cols-span publish-advanced">
+              <summary>Advanced</summary>
+              <div class="publish-advanced-row">
+                <button type="button" class="secondary" id="send-dry-btn">Dry-run (no email)</button>
+                <label class="check-row">
+                  <input type="checkbox" id="send-force">
+                  <span>Force send if checklist incomplete</span>
+                </label>
+              </div>
+            </details>
+          </div>
+
           <div class="editor-actions" id="editor-actions">
             <div class="action-cluster">
               <span class="cluster-label">Draft</span>
@@ -279,22 +310,7 @@
               <button type="button" class="secondary" id="generate-claude-btn">Rewrite</button>
               <button type="button" class="secondary" id="autofill-marine-btn">Weather &amp; tides</button>
             </div>
-            <div class="action-cluster">
-              <span class="cluster-label">Check</span>
-              <button type="button" class="secondary" id="fact-review-btn">AI fact-check</button>
-            </div>
-            <div class="action-cluster">
-              <span class="cluster-label">Send</span>
-              <button type="button" class="secondary" id="send-dry-btn">Dry-run</button>
-              <button type="button" id="send-live-btn">Send now</button>
-            </div>
           </div>
-
-          <label class="check-row send-force-row">
-            <input type="checkbox" id="send-force">
-            <span>Force send even if checklist incomplete</span>
-          </label>
-          <div id="send-checklist-panel" class="checklist-panel muted"></div>
 
           <div id="fact-review-panel" class="fact-review-panel muted"></div>
 
