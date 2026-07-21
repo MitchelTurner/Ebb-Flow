@@ -12,7 +12,9 @@ import {
 export interface AutoDraftResult {
   drafted: boolean;
   reason?: string;
+  /** @deprecated use sourceCount */
   findingCount: number;
+  sourceCount: number;
   topicCount?: number;
   sourceKind?: string;
   sourceTable?: string;
@@ -23,7 +25,7 @@ export interface AutoDraftResult {
  * Analyze newest unused transcripts, refine them into digestible topics,
  * autofill Ketchikan weather/tides, and draft a review issue.
  */
-export async function autoDraftFromNewestFindings(
+export async function autoDraftFromNewestSources(
   config: AppConfig,
   options?: { limit?: number }
 ): Promise<AutoDraftResult> {
@@ -33,6 +35,7 @@ export async function autoDraftFromNewestFindings(
       reason:
         "Claude API key is not set. Add AI_KEY (recommended) or AI-KEY on the Railway web service, then redeploy.",
       findingCount: 0,
+      sourceCount: 0,
     };
   }
 
@@ -43,9 +46,9 @@ export async function autoDraftFromNewestFindings(
   if (sources.length === 0) {
     return {
       drafted: false,
-      reason:
-        "No unused transcripts (or findings) found in the database to analyze.",
+      reason: "No unused transcripts found in the database to analyze.",
       findingCount: 0,
+      sourceCount: 0,
     };
   }
 
@@ -121,6 +124,7 @@ export async function autoDraftFromNewestFindings(
     return {
       drafted: true,
       findingCount: sources.length,
+      sourceCount: sources.length,
       topicCount: savedStories.length,
       sourceKind: sources[0]?.kind,
       sourceTable: sources[0]?.sourceTable,
@@ -135,3 +139,6 @@ export async function autoDraftFromNewestFindings(
     throw err;
   }
 }
+
+/** @deprecated use autoDraftFromNewestSources */
+export const autoDraftFromNewestFindings = autoDraftFromNewestSources;

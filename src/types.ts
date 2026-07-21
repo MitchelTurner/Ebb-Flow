@@ -1,7 +1,6 @@
 export type SubscriberStatus = "active" | "unsubscribed" | "bounced";
 export type IssueStatus = "draft" | "ready" | "sending" | "sent";
 export type SendStatus = "queued" | "sent" | "failed" | "skipped";
-export type TaskStatus = "todo" | "doing" | "done";
 
 export interface Subscriber {
   id: string;
@@ -65,29 +64,8 @@ export interface Story {
   quote_attribution: string | null;
   /** Raw reporter/editor notes Claude uses to draft polished copy. */
   source_notes: string;
+  /** Legacy column; unused now that findings are removed. */
   finding_id: string | null;
-}
-
-export interface Finding {
-  id: string;
-  title: string;
-  body: string;
-  source_url: string;
-  category: string;
-  found_at: string;
-  used_in_issue_id: string | null;
-  created_at?: string;
-}
-
-export interface Task {
-  id: string;
-  title: string;
-  notes: string;
-  status: TaskStatus;
-  due_date: string | null;
-  issue_id: string | null;
-  created_at?: string;
-  updated_at?: string;
 }
 
 export type TemplateData = Record<string, string>;
@@ -97,8 +75,6 @@ export interface DashboardStats {
   total_subscribers: number;
   draft_issues: number;
   ready_issues: number;
-  open_tasks: number;
-  unused_findings: number;
   unused_transcripts: number;
   scheduled_issues: number;
 }

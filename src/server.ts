@@ -11,7 +11,7 @@ import {
   runSqlFile,
   unsubscribeByToken,
 } from "./db.js";
-import { autoDraftFromNewestFindings } from "./autoDraft.js";
+import { autoDraftFromNewestSources } from "./autoDraft.js";
 import { renderIssueEmail } from "./render.js";
 import { sendDueNewsletters } from "./send.js";
 
@@ -169,7 +169,7 @@ export function createServer(config: AppConfig) {
     }
 
     try {
-      const draft = await autoDraftFromNewestFindings(config);
+      const draft = await autoDraftFromNewestSources(config);
       res.json({ ok: true, draft });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -249,10 +249,10 @@ async function runBootJobs(config: AppConfig): Promise<void> {
   if (!config.autoDraftFromFindings) return;
 
   try {
-    const draft = await autoDraftFromNewestFindings(config);
+    const draft = await autoDraftFromNewestSources(config);
     if (draft.drafted) {
       console.log(
-        `Auto-drafted issue ${draft.result?.issue.id} from ${draft.findingCount} ${draft.sourceKind || "source"}(s) in ${draft.sourceTable || "database"}`
+        `Auto-drafted issue ${draft.result?.issue.id} from ${draft.sourceCount} ${draft.sourceKind || "source"}(s) in ${draft.sourceTable || "database"}`
       );
     } else {
       console.log(`Auto-draft skipped: ${draft.reason}`);

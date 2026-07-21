@@ -15,7 +15,7 @@
     <form class="login-box" id="login-form">
       <p class="login-eyebrow">Newsroom</p>
       <h1>The Ebb &amp; Flow</h1>
-      <p>Sign in to manage subscribers, issues, and tasks.</p>
+      <p>Sign in to manage subscribers, transcripts, and email issues.</p>
       <label>
         Admin password
         <input type="password" name="password" autocomplete="current-password" required>
@@ -40,10 +40,8 @@
       <button class="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
       <button class="tab" type="button" data-tab="review" aria-selected="false">Review</button>
       <button class="tab" type="button" data-tab="transcripts" aria-selected="false">Transcripts</button>
-      <button class="tab" type="button" data-tab="findings" aria-selected="false">Findings</button>
       <button class="tab" type="button" data-tab="subscribers" aria-selected="false">Subscribers</button>
       <button class="tab" type="button" data-tab="issues" aria-selected="false">Emails</button>
-      <button class="tab" type="button" data-tab="tasks" aria-selected="false">Tasks</button>
     </nav>
 
     <p class="flash toast" id="app-flash" role="status"></p>
@@ -163,34 +161,6 @@
             <tr><th>When</th><th>Transcript</th><th>Used?</th><th></th></tr>
           </thead>
           <tbody id="transcripts-body"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section id="panel-findings" class="panel hidden" data-panel="findings">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Sources</p>
-          <h2>Findings</h2>
-        </div>
-      </div>
-      <p class="muted">Short tip-style updates. Fallback when no unused transcripts are available.</p>
-      <form id="finding-form" class="grid-form cols-2 surface">
-        <label>Title <input name="title" placeholder="Optional short label"></label>
-        <label>Category <input name="category" placeholder="Local Government"></label>
-        <label class="cols-span">Finding / update
-          <textarea name="body" required placeholder="Council voted 4–3 on the budget…"></textarea>
-        </label>
-        <label>Source URL <input name="source_url" placeholder="https://…"></label>
-        <label>Found at <input type="datetime-local" name="found_at"></label>
-        <div class="align-end"><button type="submit">Add finding</button></div>
-      </form>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr><th>When</th><th>Finding</th><th>Used?</th><th></th></tr>
-          </thead>
-          <tbody id="findings-body"></tbody>
         </table>
       </div>
     </section>
@@ -356,28 +326,6 @@
       </div>
     </section>
 
-    <section id="panel-tasks" class="panel hidden" data-panel="tasks">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Desk</p>
-          <h2>Tasks</h2>
-        </div>
-      </div>
-      <form id="task-form" class="grid-form cols-3 surface">
-        <label>Title <input name="title" required placeholder="Write lead story"></label>
-        <label>Due date <input type="date" name="due_date"></label>
-        <label>Status
-          <select name="status">
-            <option value="todo">todo</option>
-            <option value="doing">doing</option>
-            <option value="done">done</option>
-          </select>
-        </label>
-        <label class="cols-span">Notes <textarea name="notes" placeholder="Optional details"></textarea></label>
-        <div class="align-end"><button type="submit">Add task</button></div>
-      </form>
-      <div class="task-board" id="task-board"></div>
-    </section>
   </div>
 
   <script src="/admin/admin.js" type="module"></script>

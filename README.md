@@ -1,13 +1,13 @@
 # The Ebb & Flow — automated newsletter
 
-Pulls issue + subscriber data from **Railway Postgres**, fills `templates/ebb-and-flow.html`, and sends via **Resend**. Includes a public subscribe page and password-protected admin for subscribers, email issues, and tasks.
+Pulls issue + subscriber data from **Railway Postgres**, fills `templates/ebb-and-flow.html`, and sends via **Resend**. Includes a public subscribe page and password-protected admin for subscribers, transcripts, and email issues.
 
 ## What you get
 
 - Parameterized HTML email template
-- Postgres schema: `subscribers`, `issues`, `stories`, `sends`, `tasks`
+- Postgres schema: `subscribers`, `issues`, `stories`, `sends`, `transcripts`
 - Public subscribe page (`/`)
-- Admin UI (`/admin`) — manage subscribers, draft/send emails, track tasks
+- Admin UI (`/admin`) — manage subscribers, transcripts, draft/send emails
 - CLI: migrate / seed / preview / send
 - Railway-ready `railway.toml` + Dockerfile
 
@@ -60,10 +60,11 @@ Or send from **Admin → Emails → Send now**.
 
 Admin tabs:
 
-- **Overview** — subscriber/issue/task counts
+- **Overview** — subscriber / transcript / draft counts
+- **Review** — topic proposals, checklist, schedule
+- **Transcripts** — paste meeting notes for Claude to draft from
 - **Subscribers** — add, reactivate, unsubscribe, delete
-- **Emails** — create/edit issues + 6 stories, preview, dry-run/live send
-- **Tasks** — todo / doing / done board for editorial work
+- **Emails** — create/edit issues + stories, preview, dry-run/live send
 
 ## API (selected)
 
@@ -74,7 +75,7 @@ Admin tabs:
 | `GET` | `/api/admin/subscribers` | admin cookie |
 | `GET/POST/PATCH` | `/api/admin/issues` | admin cookie |
 | `POST` | `/api/admin/issues/:id/send` | admin cookie |
-| `GET/POST/PATCH` | `/api/admin/tasks` | admin cookie |
+| `GET/POST` | `/api/admin/transcripts` | admin cookie |
 
 Also:
 
@@ -102,14 +103,14 @@ If you ever see `relation "subscribers" does not exist`, redeploy the web servic
 
 ## Editorial workflow
 
-1. Add **Transcripts** in Admin → Transcripts (or insert into `transcripts`). Findings are a fallback.
+1. Add **Transcripts** in Admin → Transcripts (or insert into `transcripts`).
 2. Click **Propose topics** — Claude suggests digestible topics (deduped vs recent issues) with source grounding; weather/tides are autofilled for review.
 3. Select topics → **Write selected topics** to create the draft issue. Or use **Quick draft** to skip the review step.
 4. Run **AI fact-check** on the draft (verifies names/details against transcript notes **and the public web** via Claude web search; can auto-correct).
 5. Check the **editorial checklist**, use **Email me a preview**, then **Approve & schedule**.
 6. Cron `POST /cron/send` delivers due `ready` issues.
 
-Draft source priority: `transcripts` → `%transcript%` / `%recording%` tables → `findings`.
+Draft source priority: `transcripts` → discovered `%transcript%` / `%recording%` tables.
 
 Weather: Open-Meteo (includes “as of” time). Tides: NOAA `9450460` (Ketchikan). Override with `MARINE_*` / `TIDE_STATION_ID`.
 

@@ -129,7 +129,7 @@ export async function proposeTopicsFromNewestSources(
   if (!sources.length) {
     return {
       proposed: false,
-      reason: "No unused transcripts (or findings) found to propose topics from.",
+      reason: "No unused transcripts found to propose topics from.",
       sourceCount: 0,
     };
   }

@@ -868,36 +868,6 @@ tbody tr:hover { background: rgba(232, 238, 243, 0.03); }
   line-height: 1.45;
 }
 
-.task-board {
-  display: grid;
-  gap: var(--space-4);
-}
-
-@media (min-width: 860px) {
-  .task-board { grid-template-columns: repeat(3, 1fr); gap: var(--space-5); }
-}
-
-.task-col h3 {
-  margin: 0 0 var(--space-2);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--mute);
-  border-bottom: 1px solid var(--line);
-  padding-bottom: var(--space-2);
-}
-
-.task {
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--line);
-}
-.task strong {
-  display: block;
-  font-family: var(--serif);
-  margin-bottom: var(--space-1);
-}
-
 @keyframes fade {
   from { opacity: 0; transform: translateY(7px); }
   to { opacity: 1; transform: none; }

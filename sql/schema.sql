@@ -64,18 +64,6 @@ CREATE TABLE IF NOT EXISTS stories (
 ALTER TABLE stories ADD COLUMN IF NOT EXISTS source_notes TEXT NOT NULL DEFAULT '';
 ALTER TABLE stories ADD COLUMN IF NOT EXISTS finding_id UUID;
 
--- Raw newer database findings / tips that Claude turns into drafts.
-CREATE TABLE IF NOT EXISTS findings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL DEFAULT '',
-  body TEXT NOT NULL,
-  source_url TEXT NOT NULL DEFAULT '',
-  category TEXT NOT NULL DEFAULT '',
-  found_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  used_in_issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 -- Transcripts Claude analyzes into newsletter story drafts.
 -- If a transcripts table already exists (different schema), CREATE is skipped
 -- and the ALTERs below add any missing app columns without wiping data.
@@ -90,7 +78,7 @@ CREATE TABLE IF NOT EXISTS transcripts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Existing transcripts/findings tables may predate app columns.
+-- Existing transcripts tables may predate app columns.
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS content TEXT NOT NULL DEFAULT '';
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT '';
@@ -98,14 +86,6 @@ ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS speaker TEXT NOT NULL DEFAULT '
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS used_in_issue_id UUID REFERENCES issues(id) ON DELETE SET NULL;
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
-
-ALTER TABLE findings ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
-ALTER TABLE findings ADD COLUMN IF NOT EXISTS body TEXT NOT NULL DEFAULT '';
-ALTER TABLE findings ADD COLUMN IF NOT EXISTS source_url TEXT NOT NULL DEFAULT '';
-ALTER TABLE findings ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
-ALTER TABLE findings ADD COLUMN IF NOT EXISTS found_at TIMESTAMPTZ NOT NULL DEFAULT now();
-ALTER TABLE findings ADD COLUMN IF NOT EXISTS used_in_issue_id UUID REFERENCES issues(id) ON DELETE SET NULL;
-ALTER TABLE findings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 -- Tracks which external/source rows have already been drafted into an issue
 -- (used for discovered transcript tables that lack used_in_issue_id).
@@ -129,18 +109,6 @@ CREATE TABLE IF NOT EXISTS sends (
   UNIQUE (issue_id, subscriber_id)
 );
 
-CREATE TABLE IF NOT EXISTS tasks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL,
-  notes TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'todo'
-    CHECK (status IN ('todo', 'doing', 'done')),
-  due_date DATE,
-  issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 -- Pending topic proposals (review before Claude writes full copy).
 CREATE TABLE IF NOT EXISTS topic_proposals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -160,11 +128,13 @@ CREATE INDEX IF NOT EXISTS idx_issues_scheduled
   ON issues (scheduled_for)
   WHERE status = 'ready' AND scheduled_for IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_stories_issue_position ON stories (issue_id, position);
-CREATE INDEX IF NOT EXISTS idx_findings_unused ON findings (found_at DESC) WHERE used_in_issue_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_transcripts_unused ON transcripts (recorded_at DESC) WHERE used_in_issue_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_source_usage_issue ON source_usage (issue_id);
 CREATE INDEX IF NOT EXISTS idx_sends_issue ON sends (issue_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status, due_date NULLS LAST);
 CREATE INDEX IF NOT EXISTS idx_topic_proposals_pending
   ON topic_proposals (created_at DESC)
   WHERE status = 'pending';
+
+-- Legacy tables from earlier app versions (safe no-ops if already gone).
+DROP TABLE IF EXISTS tasks;
+DROP TABLE IF EXISTS findings;

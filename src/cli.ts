@@ -8,7 +8,7 @@ import {
   getStories,
   runSqlFile,
 } from "./db.js";
-import { autoDraftFromNewestFindings } from "./autoDraft.js";
+import { autoDraftFromNewestSources } from "./autoDraft.js";
 import { generateAndSaveIssue } from "./generate.js";
 import { renderIssueEmail } from "./render.js";
 import { sendDueNewsletters, sendNewsletter } from "./send.js";
@@ -53,7 +53,7 @@ async function main(): Promise<void> {
         break;
       }
       case "auto-draft": {
-        const result = await autoDraftFromNewestFindings(getConfig());
+        const result = await autoDraftFromNewestSources(getConfig());
         console.log(JSON.stringify(result, null, 2));
         if (!result.drafted) process.exitCode = 1;
         break;

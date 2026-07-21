@@ -4,14 +4,11 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import type {
   DashboardStats,
-  Finding,
   Issue,
   IssueStatus,
   Story,
   Subscriber,
   SubscriberStatus,
-  Task,
-  TaskStatus,
 } from "./types.js";
 
 const { Pool } = pg;
@@ -56,7 +53,7 @@ export async function runSqlFile(databaseUrl: string, relativePath: string): Pro
 
 async function countUnusedSourceRows(
   databaseUrl: string,
-  table: "transcripts" | "findings"
+  table: "transcripts"
 ): Promise<number> {
   const db = getPool(databaseUrl);
   const { rows: colRows } = await db.query<{ column_name: string }>(
@@ -93,25 +90,20 @@ async function countUnusedSourceRows(
 }
 
 export async function getDashboardStats(databaseUrl: string): Promise<DashboardStats> {
-  const { rows } = await getPool(databaseUrl).query<Omit<DashboardStats, "unused_findings" | "unused_transcripts">>(`
+  const { rows } = await getPool(databaseUrl).query<Omit<DashboardStats, "unused_transcripts">>(`
     SELECT
       (SELECT COUNT(*)::int FROM subscribers WHERE status = 'active') AS active_subscribers,
       (SELECT COUNT(*)::int FROM subscribers) AS total_subscribers,
       (SELECT COUNT(*)::int FROM issues WHERE status = 'draft') AS draft_issues,
       (SELECT COUNT(*)::int FROM issues WHERE status = 'ready') AS ready_issues,
-      (SELECT COUNT(*)::int FROM tasks WHERE status IN ('todo', 'doing')) AS open_tasks,
       (SELECT COUNT(*)::int FROM issues
         WHERE status = 'ready' AND scheduled_for IS NOT NULL AND scheduled_for > now()) AS scheduled_issues
   `);
 
-  const [unused_findings, unused_transcripts] = await Promise.all([
-    countUnusedSourceRows(databaseUrl, "findings"),
-    countUnusedSourceRows(databaseUrl, "transcripts"),
-  ]);
+  const unused_transcripts = await countUnusedSourceRows(databaseUrl, "transcripts");
 
   return {
     ...rows[0],
-    unused_findings,
     unused_transcripts,
   };
 }
@@ -568,175 +560,4 @@ export async function getSubscriberByToken(
   return rows[0] ?? null;
 }
 
-export async function listTasks(databaseUrl: string): Promise<Task[]> {
-  const { rows } = await getPool(databaseUrl).query<Task>(
-    `SELECT id, title, notes, status, due_date::text, issue_id,
-            created_at::text, updated_at::text
-     FROM tasks
-     ORDER BY
-       CASE status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END,
-       due_date NULLS LAST,
-       created_at DESC`
-  );
-  return rows;
-}
-
-export async function createTask(
-  databaseUrl: string,
-  input: {
-    title: string;
-    notes?: string;
-    status?: TaskStatus;
-    due_date?: string | null;
-    issue_id?: string | null;
-  }
-): Promise<Task> {
-  const { rows } = await getPool(databaseUrl).query<Task>(
-    `INSERT INTO tasks (title, notes, status, due_date, issue_id)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, title, notes, status, due_date::text, issue_id,
-               created_at::text, updated_at::text`,
-    [
-      input.title.trim(),
-      input.notes ?? "",
-      input.status ?? "todo",
-      input.due_date || null,
-      input.issue_id || null,
-    ]
-  );
-  return rows[0];
-}
-
-export async function updateTask(
-  databaseUrl: string,
-  id: string,
-  input: Partial<{
-    title: string;
-    notes: string;
-    status: TaskStatus;
-    due_date: string | null;
-    issue_id: string | null;
-  }>
-): Promise<Task | null> {
-  const { rows: existing } = await getPool(databaseUrl).query<Task>(
-    `SELECT id, title, notes, status, due_date::text, issue_id
-     FROM tasks WHERE id = $1`,
-    [id]
-  );
-  const current = existing[0];
-  if (!current) return null;
-
-  const { rows } = await getPool(databaseUrl).query<Task>(
-    `UPDATE tasks SET
-       title = $2,
-       notes = $3,
-       status = $4,
-       due_date = $5,
-       issue_id = $6,
-       updated_at = now()
-     WHERE id = $1
-     RETURNING id, title, notes, status, due_date::text, issue_id,
-               created_at::text, updated_at::text`,
-    [
-      id,
-      input.title ?? current.title,
-      input.notes ?? current.notes,
-      input.status ?? current.status,
-      input.due_date !== undefined ? input.due_date : current.due_date,
-      input.issue_id !== undefined ? input.issue_id : current.issue_id,
-    ]
-  );
-  return rows[0] ?? null;
-}
-
-export async function deleteTask(databaseUrl: string, id: string): Promise<boolean> {
-  const { rowCount } = await getPool(databaseUrl).query(
-    `DELETE FROM tasks WHERE id = $1`,
-    [id]
-  );
-  return (rowCount ?? 0) > 0;
-}
-
-const FINDING_SELECT = `id, title, body, source_url, category,
-  found_at::text, used_in_issue_id, created_at::text`;
-
-export async function listFindings(
-  databaseUrl: string,
-  opts?: { unusedOnly?: boolean }
-): Promise<Finding[]> {
-  const unusedOnly = opts?.unusedOnly ?? false;
-  const { rows } = await getPool(databaseUrl).query<Finding>(
-    `SELECT ${FINDING_SELECT}
-     FROM findings
-     ${unusedOnly ? "WHERE used_in_issue_id IS NULL" : ""}
-     ORDER BY found_at DESC, created_at DESC`
-  );
-  return rows;
-}
-
-export async function getNewestUnusedFindings(
-  databaseUrl: string,
-  limit = 6
-): Promise<Finding[]> {
-  const { rows } = await getPool(databaseUrl).query<Finding>(
-    `SELECT ${FINDING_SELECT}
-     FROM findings
-     WHERE used_in_issue_id IS NULL
-     ORDER BY found_at DESC, created_at DESC
-     LIMIT $1`,
-    [limit]
-  );
-  return rows;
-}
-
-export async function createFinding(
-  databaseUrl: string,
-  input: {
-    title?: string;
-    body: string;
-    source_url?: string;
-    category?: string;
-    found_at?: string;
-  }
-): Promise<Finding> {
-  const { rows } = await getPool(databaseUrl).query<Finding>(
-    `INSERT INTO findings (title, body, source_url, category, found_at)
-     VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, now()))
-     RETURNING ${FINDING_SELECT}`,
-    [
-      input.title?.trim() || "",
-      input.body.trim(),
-      input.source_url?.trim() || "",
-      input.category?.trim() || "",
-      input.found_at || null,
-    ]
-  );
-  return rows[0];
-}
-
-export async function deleteFinding(
-  databaseUrl: string,
-  id: string
-): Promise<boolean> {
-  const { rowCount } = await getPool(databaseUrl).query(
-    `DELETE FROM findings WHERE id = $1 AND used_in_issue_id IS NULL`,
-    [id]
-  );
-  return (rowCount ?? 0) > 0;
-}
-
-export async function markFindingsUsed(
-  databaseUrl: string,
-  findingIds: string[],
-  issueId: string
-): Promise<void> {
-  if (findingIds.length === 0) return;
-  await getPool(databaseUrl).query(
-    `UPDATE findings
-     SET used_in_issue_id = $2
-     WHERE id = ANY($1::uuid[])`,
-    [findingIds, issueId]
-  );
-}
-
-export type { IssueStatus, SubscriberStatus, TaskStatus };
+export type { IssueStatus, SubscriberStatus };

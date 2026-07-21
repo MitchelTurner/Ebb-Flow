@@ -7,29 +7,22 @@ import {
   setAdminCookie,
   verifyAdminPassword,
 } from "./auth.js";
-import { autoDraftFromNewestFindings } from "./autoDraft.js";
+import { autoDraftFromNewestSources } from "./autoDraft.js";
 import {
-  createFinding,
   createIssue,
-  createTask,
-  deleteFinding,
   deleteIssue,
   deleteStory,
   deleteSubscriber,
-  deleteTask,
   getDashboardStats,
   getIssueForSend,
   getStories,
-  listFindings,
   listIssues,
   listReviewIssues,
   listSubscribers,
-  listTasks,
   scheduleIssue,
   subscribe,
   updateIssue,
   updateSubscriberStatus,
-  updateTask,
   upsertStory,
 } from "./db.js";
 import {
@@ -56,7 +49,6 @@ import type {
   IssueStatus,
   ProposalTopic,
   SubscriberStatus,
-  TaskStatus,
 } from "./types.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -527,52 +519,6 @@ export function createApiRouter(config: AppConfig): Router {
     }
   });
 
-  router.get("/admin/findings", guard, async (req, res) => {
-    try {
-      const unusedOnly = String(req.query.unused ?? "") === "1";
-      const findings = await listFindings(config.databaseUrl, { unusedOnly });
-      res.json({ findings });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: message });
-    }
-  });
-
-  router.post("/admin/findings", guard, async (req, res) => {
-    try {
-      const body = String(req.body?.body ?? "").trim();
-      if (!body) {
-        badRequest(res, "body is required.");
-        return;
-      }
-      const finding = await createFinding(config.databaseUrl, {
-        title: String(req.body?.title ?? ""),
-        body,
-        source_url: String(req.body?.source_url ?? ""),
-        category: String(req.body?.category ?? ""),
-        found_at: req.body?.found_at || undefined,
-      });
-      res.status(201).json({ finding });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: message });
-    }
-  });
-
-  router.delete("/admin/findings/:id", guard, async (req, res) => {
-    try {
-      const ok = await deleteFinding(config.databaseUrl, req.params.id);
-      if (!ok) {
-        res.status(404).json({ error: "Finding not found or already used" });
-        return;
-      }
-      res.json({ ok: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: message });
-    }
-  });
-
   router.get("/admin/transcripts", guard, async (req, res) => {
     try {
       const unusedOnly = String(req.query.unused ?? "") === "1";
@@ -621,7 +567,7 @@ export function createApiRouter(config: AppConfig): Router {
 
   router.post("/admin/auto-draft", guard, async (_req, res) => {
     try {
-      const draft = await autoDraftFromNewestFindings(config);
+      const draft = await autoDraftFromNewestSources(config);
       res.json({ ok: true, draft });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -708,72 +654,6 @@ export function createApiRouter(config: AppConfig): Router {
       const ok = await discardProposal(config.databaseUrl, req.params.id);
       if (!ok) {
         res.status(404).json({ error: "Proposal not found or not pending" });
-        return;
-      }
-      res.json({ ok: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: message });
-    }
-  });
-
-  router.get("/admin/tasks", guard, async (_req, res) => {
-    try {
-      const tasks = await listTasks(config.databaseUrl);
-      res.json({ tasks });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: message });
-    }
-  });
-
-  router.post("/admin/tasks", guard, async (req, res) => {
-    try {
-      const title = String(req.body?.title ?? "").trim();
-      if (!title) {
-        badRequest(res, "title is required.");
-        return;
-      }
-      const task = await createTask(config.databaseUrl, {
-        title,
-        notes: String(req.body?.notes ?? ""),
-        status: (req.body?.status as TaskStatus) || "todo",
-        due_date: req.body?.due_date || null,
-        issue_id: req.body?.issue_id || null,
-      });
-      res.status(201).json({ task });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: message });
-    }
-  });
-
-  router.patch("/admin/tasks/:id", guard, async (req, res) => {
-    try {
-      if (req.body?.status) {
-        const status = String(req.body.status) as TaskStatus;
-        if (!["todo", "doing", "done"].includes(status)) {
-          badRequest(res, "Invalid task status.");
-          return;
-        }
-      }
-      const task = await updateTask(config.databaseUrl, req.params.id, req.body);
-      if (!task) {
-        res.status(404).json({ error: "Task not found" });
-        return;
-      }
-      res.json({ task });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: message });
-    }
-  });
-
-  router.delete("/admin/tasks/:id", guard, async (req, res) => {
-    try {
-      const ok = await deleteTask(config.databaseUrl, req.params.id);
-      if (!ok) {
-        res.status(404).json({ error: "Task not found" });
         return;
       }
       res.json({ ok: true });

@@ -1,6 +1,6 @@
 import { getPool } from "./db.js";
 
-export type DraftSourceKind = "transcript" | "finding" | "external_transcript";
+export type DraftSourceKind = "transcript" | "external_transcript";
 
 export interface DraftSource {
   kind: DraftSourceKind;
@@ -219,79 +219,6 @@ export async function getNewestUnusedTranscripts(
   return loadUnusedFromTranscriptTable(databaseUrl, "transcripts", limit, "transcript");
 }
 
-/** Newest unused findings (legacy / tip stream). */
-export async function getNewestUnusedFindingsAsSources(
-  databaseUrl: string,
-  limit: number
-): Promise<DraftSource[]> {
-  if (!(await tableExists(databaseUrl, "findings"))) return [];
-
-  const columns = await getTableColumns(databaseUrl, "findings");
-  const bodyCol = pickColumn(columns, ["body", "content", "summary", "text", "notes"]);
-  const idCol = pickColumn(columns, ID_CANDIDATES);
-  if (!bodyCol || !idCol) return [];
-
-  const titleCol = pickColumn(columns, TITLE_CANDIDATES);
-  const urlCol = pickColumn(columns, ["source_url", "url"]);
-  const categoryCol = pickColumn(columns, ["category", "source", "label"]);
-  const timeCol = pickColumn(columns, ["found_at", "created_at", "updated_at"]);
-  const usedCol = pickColumn(columns, USED_CANDIDATES);
-
-  const selectParts = [
-    `${idCol}::text AS id`,
-    `${bodyCol}::text AS body`,
-    titleCol ? `${titleCol}::text AS title` : `''::text AS title`,
-    urlCol ? `${urlCol}::text AS source_url` : `''::text AS source_url`,
-    categoryCol ? `${categoryCol}::text AS category` : `''::text AS category`,
-    timeCol ? `${timeCol}::text AS found_at` : `NULL::text AS found_at`,
-  ];
-
-  const unusedParts = [
-    `COALESCE(TRIM(${bodyCol}::text), '') <> ''`,
-    `NOT EXISTS (
-       SELECT 1 FROM source_usage su
-       WHERE su.source_table = 'findings' AND su.source_id = ${idCol}::text
-     )`,
-  ];
-  if (usedCol) unusedParts.push(`${usedCol} IS NULL`);
-
-  try {
-    const { rows } = await getPool(databaseUrl).query<{
-      id: string;
-      title: string;
-      body: string;
-      source_url: string;
-      category: string;
-      found_at: string | null;
-    }>(
-      `SELECT ${selectParts.join(", ")}
-       FROM findings
-       WHERE ${unusedParts.join("\n         AND ")}
-       ORDER BY ${timeCol ? `${timeCol} DESC NULLS LAST` : `${idCol} DESC`}
-       LIMIT $1`,
-      [limit]
-    );
-
-    return rows
-      .filter((row) => row.body?.trim())
-      .map((row) => ({
-        kind: "finding" as const,
-        id: row.id,
-        sourceTable: "findings",
-        title: row.title || "",
-        content: row.body,
-        meta: row.category || "",
-        occurredAt: row.found_at,
-        url: row.source_url || "",
-        category: row.category || "Local",
-      }));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`Skipping findings table: ${message}`);
-    return [];
-  }
-}
-
 /**
  * Discover other public tables whose names look like transcripts and load
  * newest rows not yet recorded in source_usage.
@@ -305,7 +232,7 @@ export async function discoverExternalTranscripts(
      FROM information_schema.tables
      WHERE table_schema = 'public'
        AND table_type = 'BASE TABLE'
-       AND table_name NOT IN ('transcripts', 'findings', 'source_usage', 'stories', 'issues', 'subscribers', 'sends', 'tasks', 'topic_proposals')
+       AND table_name NOT IN ('transcripts', 'source_usage', 'stories', 'issues', 'subscribers', 'sends', 'topic_proposals')
        AND (
          table_name ILIKE '%transcript%'
          OR table_name ILIKE '%recording%'
@@ -328,7 +255,7 @@ export async function discoverExternalTranscripts(
   return out;
 }
 
-/** Prefer app transcripts, then discovered transcript tables, then findings. */
+/** Prefer app transcripts, then discovered transcript tables. */
 export async function getNewestDraftSources(
   databaseUrl: string,
   limit: number
@@ -336,10 +263,7 @@ export async function getNewestDraftSources(
   const transcripts = await getNewestUnusedTranscripts(databaseUrl, limit);
   if (transcripts.length > 0) return transcripts.slice(0, limit);
 
-  const external = await discoverExternalTranscripts(databaseUrl, limit);
-  if (external.length > 0) return external.slice(0, limit);
-
-  return (await getNewestUnusedFindingsAsSources(databaseUrl, limit)).slice(0, limit);
+  return (await discoverExternalTranscripts(databaseUrl, limit)).slice(0, limit);
 }
 
 /** Load specific source rows by id, including already-used ones (for accept/reground). */
@@ -350,51 +274,8 @@ export async function getDraftSourcesByRefs(
   const out: DraftSource[] = [];
   for (const ref of refs) {
     if (!isSafeIdent(ref.sourceTable)) continue;
+    if (ref.sourceTable === "findings" || ref.kind === "finding") continue;
     if (!(await tableExists(databaseUrl, ref.sourceTable))) continue;
-
-    if (ref.sourceTable === "findings" || ref.kind === "finding") {
-      const columns = await getTableColumns(databaseUrl, "findings");
-      const bodyCol = pickColumn(columns, ["body", "content", "summary", "text", "notes"]);
-      const idCol = pickColumn(columns, ID_CANDIDATES);
-      if (!bodyCol || !idCol) continue;
-      const titleCol = pickColumn(columns, TITLE_CANDIDATES);
-      const urlCol = pickColumn(columns, ["source_url", "url"]);
-      const categoryCol = pickColumn(columns, ["category", "source", "label"]);
-      const timeCol = pickColumn(columns, ["found_at", "created_at", "updated_at"]);
-      const { rows } = await getPool(databaseUrl).query<{
-        id: string;
-        title: string;
-        body: string;
-        source_url: string;
-        category: string;
-        found_at: string | null;
-      }>(
-        `SELECT ${idCol}::text AS id,
-                ${bodyCol}::text AS body,
-                ${titleCol ? `${titleCol}::text` : `''::text`} AS title,
-                ${urlCol ? `${urlCol}::text` : `''::text`} AS source_url,
-                ${categoryCol ? `${categoryCol}::text` : `''::text`} AS category,
-                ${timeCol ? `${timeCol}::text` : `NULL::text`} AS found_at
-         FROM findings
-         WHERE ${idCol}::text = $1
-         LIMIT 1`,
-        [ref.id]
-      );
-      const row = rows[0];
-      if (!row?.body?.trim()) continue;
-      out.push({
-        kind: "finding",
-        id: row.id,
-        sourceTable: "findings",
-        title: row.title || "",
-        content: row.body,
-        meta: row.category || "",
-        occurredAt: row.found_at,
-        url: row.source_url || "",
-        category: row.category || "Local",
-      });
-      continue;
-    }
 
     const columns = await getTableColumns(databaseUrl, ref.sourceTable);
     const shape = resolveTranscriptShape(columns);
@@ -675,8 +556,5 @@ export async function countUnusedTranscriptSources(
 ): Promise<number> {
   const owned = await getNewestUnusedTranscripts(databaseUrl, 1000);
   if (owned.length) return owned.length;
-  const external = await discoverExternalTranscripts(databaseUrl, 1000);
-  if (external.length) return external.length;
-  const findings = await getNewestUnusedFindingsAsSources(databaseUrl, 1000);
-  return findings.length;
+  return (await discoverExternalTranscripts(databaseUrl, 1000)).length;
 }

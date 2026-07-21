@@ -11,7 +11,6 @@ const issueForm = document.getElementById("issue-form");
 const storyForm = document.getElementById("story-form");
 const storiesList = document.getElementById("stories-list");
 const previewLink = document.getElementById("preview-link");
-const taskBoard = document.getElementById("task-board");
 
 /** @type {any[]} */
 let issuesCache = [];
@@ -101,11 +100,9 @@ async function refreshAll() {
     loadStats(),
     loadSubscribers(),
     loadIssues(),
-    loadTasks(),
     loadReview(),
     loadProposals(),
     loadTranscripts(),
-    loadFindings(),
   ]);
 }
 
@@ -115,11 +112,9 @@ async function loadStats() {
   const items = [
     ["Active subscribers", stats.active_subscribers],
     ["Unused transcripts", stats.unused_transcripts ?? 0],
-    ["Unused findings", stats.unused_findings],
     ["Drafts to review", stats.draft_issues],
     ["Scheduled", stats.scheduled_issues],
     ["Ready / due", stats.ready_issues],
-    ["Open tasks", stats.open_tasks],
   ];
   statsEl.innerHTML = items
     .map(
@@ -144,10 +139,11 @@ async function runAutoDraft() {
       flash(appFlash, draft.reason || "Nothing to draft.", "err");
       return;
     }
-    const topics = draft.topicCount ?? draft.findingCount;
+    const topics = draft.topicCount ?? draft.sourceCount ?? draft.findingCount;
+    const sources = draft.sourceCount ?? draft.findingCount;
     flash(
       appFlash,
-      `Draft ready — ${topics} topic${topics === 1 ? "" : "s"} from ${draft.findingCount} source${draft.findingCount === 1 ? "" : "s"} (weather & tides filled).`,
+      `Draft ready — ${topics} topic${topics === 1 ? "" : "s"} from ${sources} source${sources === 1 ? "" : "s"} (weather & tides filled).`,
       "ok"
     );
     selectTab("review");
@@ -337,37 +333,6 @@ async function loadTranscripts() {
     : `<tr><td colspan="4" class="muted">No transcripts yet.</td></tr>`;
 }
 
-async function loadFindings() {
-  const { findings } = await api("/api/admin/findings");
-  const body = document.getElementById("findings-body");
-  if (!body) return;
-  body.innerHTML = findings.length
-    ? findings
-        .map((finding) => {
-          const when = finding.found_at
-            ? new Date(finding.found_at).toLocaleString()
-            : "—";
-          const used = finding.used_in_issue_id ? "used" : "unused";
-          return `<tr>
-            <td>${escapeHtml(when)}</td>
-            <td>
-              <strong>${escapeHtml(finding.title || "(untitled)")}</strong>
-              <div class="muted">${escapeHtml(finding.body.slice(0, 160))}${finding.body.length > 160 ? "…" : ""}</div>
-            </td>
-            <td><span class="badge ${used === "unused" ? "todo" : "done"}">${used}</span></td>
-            <td class="row-actions">
-              ${
-                finding.used_in_issue_id
-                  ? ""
-                  : `<button type="button" class="danger" data-finding-delete="${finding.id}">Delete</button>`
-              }
-            </td>
-          </tr>`;
-        })
-        .join("")
-    : `<tr><td colspan="4" class="muted">No findings yet.</td></tr>`;
-}
-
 async function loadSubscribers() {
   const { subscribers } = await api("/api/admin/subscribers");
   if (!subscribersBody) return;
@@ -408,56 +373,6 @@ async function loadIssues() {
         </td>
       </tr>`
     )
-    .join("");
-}
-
-async function loadTasks() {
-  const { tasks } = await api("/api/admin/tasks");
-  if (!taskBoard) return;
-  const columns = [
-    ["todo", "To do"],
-    ["doing", "Doing"],
-    ["done", "Done"],
-  ];
-  taskBoard.innerHTML = columns
-    .map(([status, label]) => {
-      const items = tasks.filter((t) => t.status === status);
-      return `<div class="task-col">
-        <h3>${label} (${items.length})</h3>
-        ${
-          items.length
-            ? items
-                .map(
-                  (task) => `<div class="task">
-                    <strong>${escapeHtml(task.title)}</strong>
-                    <div class="muted">${escapeHtml(task.notes || "")}${
-                      task.due_date ? ` · due ${escapeHtml(task.due_date)}` : ""
-                    }</div>
-                    <div class="row-actions spaced-sm">
-                      ${
-                        status !== "todo"
-                          ? `<button type="button" class="secondary" data-task-status="${task.id}" data-status="todo">To do</button>`
-                          : ""
-                      }
-                      ${
-                        status !== "doing"
-                          ? `<button type="button" class="secondary" data-task-status="${task.id}" data-status="doing">Doing</button>`
-                          : ""
-                      }
-                      ${
-                        status !== "done"
-                          ? `<button type="button" class="secondary" data-task-status="${task.id}" data-status="done">Done</button>`
-                          : ""
-                      }
-                      <button type="button" class="danger" data-task-delete="${task.id}">Delete</button>
-                    </div>
-                  </div>`
-                )
-                .join("")
-            : `<p class="muted">No tasks</p>`
-        }
-      </div>`;
-    })
     .join("");
 }
 
@@ -895,43 +810,6 @@ document.getElementById("transcripts-body")?.addEventListener("click", async (ev
   }
 });
 
-document.getElementById("finding-form")?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  if (!(form instanceof HTMLFormElement)) return;
-  const data = Object.fromEntries(new FormData(form).entries());
-  if (data.found_at) {
-    data.found_at = new Date(String(data.found_at)).toISOString();
-  } else {
-    delete data.found_at;
-  }
-  try {
-    await api("/api/admin/findings", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-    form.reset();
-    flash(appFlash, "Finding added.", "ok");
-    await Promise.all([loadFindings(), loadStats()]);
-  } catch (err) {
-    flash(appFlash, err.message, "err");
-  }
-});
-
-document.getElementById("findings-body")?.addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement) || !target.dataset.findingDelete) return;
-  if (!confirm("Delete this unused finding?")) return;
-  try {
-    await api(`/api/admin/findings/${target.dataset.findingDelete}`, {
-      method: "DELETE",
-    });
-    await Promise.all([loadFindings(), loadStats()]);
-  } catch (err) {
-    flash(appFlash, err.message, "err");
-  }
-});
-
 document.getElementById("generate-claude-btn")?.addEventListener("click", async () => {
   if (!selectedIssueId) {
     flash(appFlash, "Save the issue and at least one story first.", "err");
@@ -1158,47 +1036,6 @@ storiesList?.addEventListener("click", async (event) => {
     } catch (err) {
       flash(appFlash, err.message, "err");
     }
-  }
-});
-
-document.getElementById("task-form")?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  if (!(form instanceof HTMLFormElement)) return;
-  const data = Object.fromEntries(new FormData(form).entries());
-  try {
-    await api("/api/admin/tasks", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-    form.reset();
-    flash(appFlash, "Task added.", "ok");
-    await Promise.all([loadTasks(), loadStats()]);
-  } catch (err) {
-    flash(appFlash, err.message, "err");
-  }
-});
-
-taskBoard?.addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  try {
-    if (target.dataset.taskStatus) {
-      await api(`/api/admin/tasks/${target.dataset.taskStatus}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: target.dataset.status }),
-      });
-      await Promise.all([loadTasks(), loadStats()]);
-    }
-    if (target.dataset.taskDelete) {
-      if (!confirm("Delete this task?")) return;
-      await api(`/api/admin/tasks/${target.dataset.taskDelete}`, {
-        method: "DELETE",
-      });
-      await Promise.all([loadTasks(), loadStats()]);
-    }
-  } catch (err) {
-    flash(appFlash, err.message, "err");
   }
 });
 
