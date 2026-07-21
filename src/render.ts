@@ -1,14 +1,13 @@
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { resolveTemplatesDir } from "./assetPaths.js";
+import {
+  brandLogoUrl,
+  type LogoDelivery,
+} from "./brandAssets.js";
 import type { Issue, Story, Subscriber, TemplateData } from "./types.js";
 
-const templatePath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "templates",
-  "ebb-and-flow.html"
-);
+const templatePath = join(resolveTemplatesDir(), "ebb-and-flow.html");
 
 const TAG_RE = /\{\{(\w+)(?:\|([^}]+))?\}\}/g;
 
@@ -111,8 +110,11 @@ export function buildTemplateData(params: {
   stories: Story[];
   subscriber: Pick<Subscriber, "first_name" | "unsubscribe_token">;
   appUrl: string;
+  /** How to reference the masthead logo. Default: hosted via APP_URL. */
+  logoDelivery?: LogoDelivery;
 }): TemplateData {
   const { issue, stories, subscriber, appUrl } = params;
+  const logoDelivery = params.logoDelivery ?? "hosted";
   const first = storyByPosition(stories, 1);
   const drop = splitDropcap(first?.summary ?? "");
 
@@ -120,8 +122,8 @@ export function buildTemplateData(params: {
     email_subject: escapeHtml(issue.subject),
     preheader: escapeHtml(issue.preheader),
     view_in_browser_url: `${appUrl}/preview/${issue.id}`,
-    /** Light mark on navy masthead — transparent PNG for email clients. */
-    logo_url: `${appUrl}/brand/logo-mark-light-128.png`,
+    /** Light mark on navy masthead — CID for sends, relative for in-app preview. */
+    logo_url: brandLogoUrl(logoDelivery, appUrl),
     issue_date_label: escapeHtml(formatIssueDateLabel(issue.issue_date)),
     volume_label: escapeHtml(issue.volume_label),
     high_tide_label: escapeHtml(issue.high_tide_label),
@@ -180,6 +182,7 @@ export function renderIssueEmail(params: {
   subscriber: Pick<Subscriber, "first_name" | "unsubscribe_token">;
   appUrl: string;
   template?: string;
+  logoDelivery?: LogoDelivery;
 }): string {
   const template = params.template ?? loadTemplate();
   const data = buildTemplateData(params);

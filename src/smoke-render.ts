@@ -75,6 +75,26 @@ assert.match(html, /Good morning, Alex\./);
 assert.match(html, /Story 1 title/);
 assert.match(html, /unsubscribe\/tok/);
 assert.match(html, /\/brand\/logo-mark-light-128\.png/);
+assert.match(
+  renderIssueEmail({
+    issue,
+    stories,
+    subscriber: { first_name: "Alex", unsubscribe_token: "tok" },
+    appUrl: "http://localhost:3000",
+    logoDelivery: "cid",
+  }),
+  /cid:ebb-flow-logo/
+);
+assert.match(
+  renderIssueEmail({
+    issue,
+    stories,
+    subscriber: { first_name: "Alex", unsubscribe_token: "tok" },
+    appUrl: "http://localhost:3000",
+    logoDelivery: "relative",
+  }),
+  /src="\/brand\/logo-mark-light-128\.png"/
+);
 assert.match(html, /A memorable quote/);
 assert.match(html, /placehold\.co/);
 assert.doesNotMatch(html, /\{\{[a-z0-9_|]+\}\}/i);

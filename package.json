@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-static.mjs",
     "dev": "tsx src/cli.ts",
     "send": "tsx src/cli.ts send",
     "preview": "tsx src/cli.ts preview",

@@ -1,7 +1,8 @@
 import express from "express";
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { resolveBrandFile, resolvePublicDir } from "./assetPaths.js";
+import { BRAND_LOGO_LIGHT_PNG, BRAND_LOGO_LIGHT_SVG } from "./brandAssets.js";
 import { createApiRouter } from "./api.js";
 import type { AppConfig } from "./config.js";
 import {
@@ -16,7 +17,7 @@ import { renderIssueEmail } from "./render.js";
 import { sendDueNewsletters } from "./send.js";
 import { startWeeklyCronScheduler } from "./weeklyCron.js";
 
-const publicDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
+const publicDir = resolvePublicDir();
 const indexHtml = join(publicDir, "index.html");
 const adminHtml = join(publicDir, "admin", "index.html");
 
@@ -31,7 +32,10 @@ export function createServer(config: AppConfig) {
     res.json({
       ok: true,
       service: "ebb-flow-newsletter",
+      publicDir,
       publicDirExists: existsSync(publicDir),
+      brandLogoSvg: Boolean(resolveBrandFile(BRAND_LOGO_LIGHT_SVG)),
+      brandLogoPng: Boolean(resolveBrandFile(BRAND_LOGO_LIGHT_PNG)),
       aiKeyConfigured: Boolean(config.anthropicApiKey),
     });
   });
@@ -47,6 +51,7 @@ export function createServer(config: AppConfig) {
       const html = renderIssueEmail({
         issue,
         stories,
+        logoDelivery: "relative",
         subscriber: {
           first_name: "neighbor",
           unsubscribe_token: "preview",

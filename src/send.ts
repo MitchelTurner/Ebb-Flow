@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import type { AppConfig } from "./config.js";
+import { brandLogoResendAttachment } from "./brandAssets.js";
 import {
   getActiveSubscribers,
   getIssueForSend,
@@ -99,6 +100,12 @@ export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
   }
 
   const resend = config.dryRun ? null : new Resend(config.resendApiKey);
+  const logoAttachment = brandLogoResendAttachment();
+  if (!logoAttachment) {
+    console.warn(
+      "Brand logo PNG missing — emails will fall back to hosted APP_URL logo"
+    );
+  }
 
   for (const subscriber of subscribers) {
     const html = renderIssueEmail({
@@ -107,6 +114,7 @@ export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
       subscriber,
       appUrl: config.appUrl,
       template,
+      logoDelivery: logoAttachment ? "cid" : "hosted",
     });
 
     if (config.dryRun) {
@@ -131,6 +139,7 @@ export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
         to: subscriber.email,
         subject: issue.subject,
         html,
+        ...(logoAttachment ? { attachments: [logoAttachment] } : {}),
         headers: {
           "List-Unsubscribe": `<${config.appUrl}/unsubscribe/${subscriber.unsubscribe_token}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
@@ -192,6 +201,7 @@ export async function sendPreviewEmail(
     throw new Error("Add stories before sending a preview.");
   }
 
+  const logoAttachment = brandLogoResendAttachment();
   const html = renderIssueEmail({
     issue,
     stories,
@@ -200,6 +210,7 @@ export async function sendPreviewEmail(
       unsubscribe_token: "preview",
     },
     appUrl: config.appUrl,
+    logoDelivery: logoAttachment ? "cid" : "hosted",
   });
 
   if (config.dryRun) {
@@ -219,6 +230,7 @@ export async function sendPreviewEmail(
     to: email,
     subject: `[Preview] ${issue.subject}`,
     html,
+    ...(logoAttachment ? { attachments: [logoAttachment] } : {}),
     headers: {
       "X-Ebb-Flow-Preview": randomUUID(),
     },
