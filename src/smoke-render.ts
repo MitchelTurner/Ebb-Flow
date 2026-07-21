@@ -5,7 +5,12 @@
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { renderIssueEmail, renderTemplate } from "./render.js";
+import {
+  buildLeadImageHtml,
+  buildQuoteHtml,
+  renderIssueEmail,
+  renderTemplate,
+} from "./render.js";
 import type { Issue, Story } from "./types.js";
 
 assert.equal(
@@ -70,7 +75,38 @@ assert.match(html, /Good morning, Alex\./);
 assert.match(html, /Story 1 title/);
 assert.match(html, /unsubscribe\/tok/);
 assert.match(html, /\/brand\/logo-mark-light-128\.png/);
+assert.match(html, /A memorable quote/);
+assert.match(html, /placehold\.co/);
 assert.doesNotMatch(html, /\{\{[a-z0-9_|]+\}\}/i);
+
+assert.equal(buildLeadImageHtml({ imageUrl: "", title: "x", url: "#" }), "");
+assert.equal(buildLeadImageHtml({ imageUrl: null, title: "x", url: "#" }), "");
+assert.equal(buildQuoteHtml({ quote: "", attribution: "Someone" }), "");
+assert.equal(buildQuoteHtml({ quote: null, attribution: "Someone" }), "");
+assert.match(
+  buildQuoteHtml({ quote: "Hello", attribution: null }),
+  /Hello/
+);
+assert.doesNotMatch(
+  buildQuoteHtml({ quote: "Hello", attribution: null }),
+  /—/
+);
+
+const bareStories = stories.map((story) =>
+  story.position === 1
+    ? { ...story, image_url: null, quote: null, quote_attribution: null }
+    : story
+);
+const bareHtml = renderIssueEmail({
+  issue,
+  stories: bareStories,
+  subscriber: { first_name: "Alex", unsubscribe_token: "tok" },
+  appUrl: "http://localhost:3000",
+});
+assert.match(bareHtml, /\/brand\/logo-mark-light-128\.png/);
+assert.doesNotMatch(bareHtml, /placehold\.co/);
+assert.doesNotMatch(bareHtml, /memorable quote/i);
+assert.doesNotMatch(bareHtml, /border-left:3px solid #b8975a/);
 
 mkdirSync(".preview", { recursive: true });
 const out = join(".preview", "smoke.html");

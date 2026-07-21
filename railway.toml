@@ -8,7 +8,7 @@ healthcheckPath = "/health"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
 
-# Separate Railway Cron service can run:
-#   npm run start:send
-# Schedule example (Mondays 15:00 UTC ≈ 7am AKST):
-#   0 15 * * 1
+# Weekly send also arms inside the web process (WEEKLY_CRON_ENABLED=true).
+# For a dedicated Railway Cron service, use railway.cron.toml:
+#   startCommand = npm run start:cron
+#   cronSchedule = 0 15 * * 1   (Mondays 15:00 UTC)

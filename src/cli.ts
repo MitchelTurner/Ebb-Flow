@@ -13,6 +13,7 @@ import { generateAndSaveIssue } from "./generate.js";
 import { renderIssueEmail } from "./render.js";
 import { sendDueNewsletters, sendNewsletter } from "./send.js";
 import { startServer } from "./server.js";
+import { runWeeklySendCron } from "./weeklyCron.js";
 
 async function main(): Promise<void> {
   const [command = "help", ...args] = process.argv.slice(2);
@@ -48,8 +49,17 @@ async function main(): Promise<void> {
         } else {
           const results = await sendDueNewsletters(fresh);
           console.log(JSON.stringify(results, null, 2));
+          if (results.length === 0) {
+            console.log("No due ready issues to send.");
+          }
           if (results.some((r) => r.failed > 0)) process.exitCode = 1;
         }
+        break;
+      }
+      case "weekly":
+      case "cron": {
+        const result = await runWeeklySendCron(getConfig());
+        console.log(JSON.stringify(result, null, 2));
         break;
       }
       case "auto-draft": {
@@ -139,6 +149,7 @@ Commands:
   auto-draft           Draft a review issue from newest unused transcripts
   send [--issue=ID] [--dry-run]
                        Send due scheduled/ready issues via Resend
+  weekly|cron          Weekly cron entrypoint (send due issues; exit 0 if none)
   serve                HTTP server (preview, unsubscribe, cron routes)
 
 Environment: see .env.example

@@ -31,7 +31,8 @@ export async function sendDueNewsletters(
 
   const due = await listDueIssues(config.databaseUrl);
   if (due.length === 0) {
-    throw new Error("No due ready issues to send");
+    // Cron should exit cleanly on quiet weeks.
+    return [];
   }
 
   const results: SendResult[] = [];

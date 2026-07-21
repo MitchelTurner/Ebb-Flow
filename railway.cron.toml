@@ -1,0 +1,14 @@
+# Dedicated Railway Cron service config (create a second service from this repo
+# and set its Config-as-code path to /railway.cron.toml).
+#
+# Mondays 15:00 UTC ≈ 7:00am AKST / 8:00am AKDT
+# The start command must exit when finished — do not use `npm run start` here.
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm ci && npm run build"
+
+[deploy]
+startCommand = "npm run start:cron"
+cronSchedule = "0 15 * * 1"
+restartPolicyType = "NEVER"

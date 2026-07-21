@@ -14,6 +14,7 @@ import {
 import { autoDraftFromNewestSources } from "./autoDraft.js";
 import { renderIssueEmail } from "./render.js";
 import { sendDueNewsletters } from "./send.js";
+import { startWeeklyCronScheduler } from "./weeklyCron.js";
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 const indexHtml = join(publicDir, "index.html");
@@ -245,6 +246,8 @@ async function runBootJobs(config: AppConfig): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`Schema migrate failed (server still up): ${message}`);
   }
+
+  startWeeklyCronScheduler(config);
 
   if (!config.autoDraftFromFindings) return;
 

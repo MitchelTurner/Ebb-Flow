@@ -69,6 +69,43 @@ function storyByPosition(stories: Story[], position: number): Story | undefined 
   return stories.find((story) => story.position === position);
 }
 
+/** Lead image markup — empty when no hosted image URL is set. */
+export function buildLeadImageHtml(params: {
+  imageUrl: string | null | undefined;
+  title: string;
+  url: string;
+}): string {
+  const imageUrl = params.imageUrl?.trim();
+  if (!imageUrl) return "";
+  const href = params.url || "#";
+  const alt = escapeHtml(params.title || "Lead photo");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tbody><tr>
+          <td align="center" valign="middle" style="background-color:#e7e1d6; border:1px solid #d8d2c8;">
+            <a href="${href}" style="text-decoration:none;">
+              <img src="${escapeHtml(imageUrl)}" width="520" alt="${alt}" style="display:block; width:100%; max-width:520px; height:auto; border:0;">
+            </a>
+          </td>
+        </tr>
+      </tbody></table>`;
+}
+
+/** Pull-quote markup — empty when quote text is missing. */
+export function buildQuoteHtml(params: {
+  quote: string | null | undefined;
+  attribution: string | null | undefined;
+}): string {
+  const quote = params.quote?.trim();
+  if (!quote) return "";
+  const attribution = params.attribution?.trim();
+  const attrHtml = attribution
+    ? `<br><span style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; font-style:normal; color:#7a8a99; letter-spacing:1.5px; text-transform:uppercase;">— ${escapeHtml(attribution)}</span>`
+    : "";
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;">
+          <tbody><tr><td style="border-left:3px solid #b8975a; padding:2px 0 2px 18px; font-family:Georgia,serif; font-size:18px; line-height:27px; font-style:italic; color:#16293a;">“${escapeHtml(quote)}”${attrHtml}</td></tr>
+        </tbody></table>`;
+}
+
 export function buildTemplateData(params: {
   issue: Issue;
   stories: Story[];
@@ -115,15 +152,22 @@ export function buildTemplateData(params: {
     data[`story_${position}_url`] = story?.url || "#";
 
     if (position === 1) {
-      data.story_1_image_url =
-        story?.image_url ||
-        "https://placehold.co/1040x440/e7e1d6/8a7f6d?text=Lead+photo";
+      data.story_1_image_url = story?.image_url?.trim() || "";
+      data.story_1_image_html = buildLeadImageHtml({
+        imageUrl: story?.image_url,
+        title: story?.title ?? "",
+        url: story?.url || "#",
+      });
       data.story_1_dropcap = drop.dropcap;
       data.story_1_summary_rest = drop.rest;
       data.story_1_quote = escapeHtml(story?.quote ?? "");
       data.story_1_quote_attribution = escapeHtml(
         story?.quote_attribution ?? ""
       );
+      data.story_1_quote_html = buildQuoteHtml({
+        quote: story?.quote,
+        attribution: story?.quote_attribution,
+      });
     }
   }
 

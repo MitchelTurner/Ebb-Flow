@@ -19,9 +19,11 @@
     "db:seed": "tsx src/cli.ts seed",
     "start": "node dist/cli.js serve",
     "start:send": "node dist/cli.js send",
+    "start:cron": "node dist/cli.js weekly",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx src/smoke-render.ts",
-    "smoke:names": "tsx src/nameCheck.smoke.ts"
+    "smoke:names": "tsx src/nameCheck.smoke.ts",
+    "smoke:cron": "tsx src/weeklyCron.smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",

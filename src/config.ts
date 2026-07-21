@@ -89,6 +89,11 @@ export function getConfig() {
       ? Number.parseInt(process.env.MAX_RECIPIENTS, 10)
       : undefined,
     port: Number.parseInt(process.env.PORT ?? "3000", 10),
+    /**
+     * When true, the web process schedules a weekly send (Mondays 15:00 UTC).
+     * Also use a Railway Cron service with railway.cron.toml for a dedicated runner.
+     */
+    weeklyCronEnabled: bool("WEEKLY_CRON_ENABLED", true),
   };
 }
 

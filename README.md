@@ -97,7 +97,9 @@ npm run db:seed
 ```
 
 4. Open your public URL to subscribe. Admin is unlisted at `/admin` (not linked from the site).
-5. Optional cron service: `npm run start:send` on `0 15 * * 1`.
+5. Weekly send cron runs Mondays **15:00 UTC** (≈ 7am AKST):
+   - Built into the web service (`WEEKLY_CRON_ENABLED=true` by default)
+   - Or add a dedicated Cron service using `railway.cron.toml` → `npm run start:cron`
 
 If you ever see `relation "subscribers" does not exist`, redeploy the web service (or run `npm run db:migrate` in Railway shell).
 
@@ -108,7 +110,7 @@ If you ever see `relation "subscribers" does not exist`, redeploy the web servic
 3. Select topics → **Write selected topics** to create the draft issue. Or use **Quick draft** to skip the review step.
 4. Run **AI fact-check** on the draft (verifies names/details against transcript notes **and the public web** via Claude web search; can auto-correct).
 5. Check the **editorial checklist**, use **Email me a preview**, then **Approve & schedule**.
-6. Cron `POST /cron/send` delivers due `ready` issues.
+6. Weekly cron (or `POST /cron/send`) delivers due `ready` issues. Lead image and pull-quote blocks are omitted when empty.
 
 Draft source priority: `transcripts` → discovered `%transcript%` / `%recording%` tables.
 

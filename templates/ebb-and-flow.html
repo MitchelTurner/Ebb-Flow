@@ -115,22 +115,11 @@
   <tr>
     <td class="px" style="padding:30px 40px 0 40px;" id="story1">
       <div style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#a07d2f; font-weight:bold; padding-bottom:14px;">{{story_1_eyebrow}}</div>
-      <!-- Lead image placeholder: replace src + this whole cell with a hosted https image before sending -->
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tbody><tr>
-          <td align="center" valign="middle" style="background-color:#e7e1d6; border:1px solid #d8d2c8;">
-            <a href="{{story_1_url}}" style="text-decoration:none;">
-              <img src="{{story_1_image_url}}" width="520" alt="{{story_1_title}}" style="display:block; width:100%; max-width:520px; height:auto; border:0;">
-            </a>
-          </td>
-        </tr>
-      </tbody></table>
+      {{story_1_image_html}}
       <div style="padding-top:18px;">
         <a href="{{story_1_url}}" class="hero-title" style="font-family:Georgia,serif; font-size:30px; line-height:36px; color:#1a1a1a; font-weight:bold; text-decoration:none;">{{story_1_title}}</a>
         <div style="font-family:Georgia,serif; font-size:16px; line-height:26px; color:#5a544a; padding-top:10px;"><span style="float:left; font-family:Georgia,serif; font-size:52px; line-height:40px; color:#16293a; font-weight:bold; padding:4px 8px 0 0;">{{story_1_dropcap}}</span>{{story_1_summary_rest}}</div>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;">
-          <tbody><tr><td style="border-left:3px solid #b8975a; padding:2px 0 2px 18px; font-family:Georgia,serif; font-size:18px; line-height:27px; font-style:italic; color:#16293a;">“{{story_1_quote}}”<br><span style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; font-style:normal; color:#7a8a99; letter-spacing:1.5px; text-transform:uppercase;">— {{story_1_quote_attribution}}</span></td></tr>
-        </tbody></table>
+        {{story_1_quote_html}}
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
           <tbody><tr>
             <td valign="top" style="font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; letter-spacing:1px; text-transform:uppercase; line-height:20px; color:#16293a; font-weight:bold; white-space:nowrap; padding-right:8px;">Why it matters:</td>
