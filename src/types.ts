@@ -89,3 +89,40 @@ export interface DashboardStats {
   unused_transcripts: number;
   scheduled_issues: number;
 }
+
+export type ProposalTopic = {
+  key: string;
+  selected: boolean;
+  toc_title: string;
+  title: string;
+  eyebrow: string;
+  summary: string;
+  why_it_matters: string;
+  source_notes: string;
+  quote: string | null;
+  quote_attribution: string | null;
+};
+
+export type ProposalSourceRef = {
+  id: string;
+  sourceTable: string;
+  kind: string;
+  title: string;
+};
+
+export type TopicProposal = {
+  id: string;
+  status: "pending" | "accepted" | "discarded";
+  sources: ProposalSourceRef[];
+  topics: ProposalTopic[];
+  marine: {
+    weather: string;
+    high_tides: string;
+    low_tides: string;
+    high_tide_label: string;
+    as_of?: string;
+  };
+  issue_id: string | null;
+  created_at: string;
+  updated_at: string;
+};

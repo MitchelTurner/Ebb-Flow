@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { Issue, Story } from "./types.js";
+import type { RecentStoryRef } from "./dedup.js";
 import type { DraftSource } from "./sources.js";
 import { sourceToNotes } from "./sources.js";
+import type { Issue, ProposalTopic, Story } from "./types.js";
+import { randomUUID } from "node:crypto";
 
 export interface GeneratedStoryCopy {
   position: number;
@@ -88,11 +90,105 @@ async function callClaudeJson(params: {
  * Refine raw transcripts into digestible topics and draft the full issue.
  * One long transcript may become multiple topics; related scraps may merge.
  */
+function recentTopicsBlock(recent?: RecentStoryRef[]): string {
+  if (!recent?.length) return "";
+  return `
+Avoid repeating these recent newsletter topics (skip near-duplicates; find a new angle or drop):
+${JSON.stringify(recent.slice(0, 40), null, 2)}
+`;
+}
+
+/** Propose digestible topics for editor review (no full issue polish yet). */
+export async function proposeTopicsFromSources(params: {
+  apiKey: string;
+  sources: DraftSource[];
+  maxTopics?: number;
+  recentTopics?: RecentStoryRef[];
+}): Promise<ProposalTopic[]> {
+  if (!params.sources.length) {
+    throw new Error("No transcripts/sources provided for topic proposal.");
+  }
+
+  const maxTopics = Math.min(Math.max(params.maxTopics ?? 6, 1), 6);
+  const inputs = params.sources.map((source, index) => ({
+    index: index + 1,
+    kind: source.kind,
+    title: source.title,
+    category: source.category,
+    meta: source.meta,
+    when: source.occurredAt,
+    transcript: source.content.slice(0, 40_000),
+  }));
+
+  const userPrompt = `Propose digestible newsletter TOPICS from these raw transcripts for editor review.
+
+Raw sources:
+${JSON.stringify(inputs, null, 2)}
+${recentTopicsBlock(params.recentTopics)}
+
+Return ONLY valid JSON:
+{
+  "topics": [
+    {
+      "toc_title": "short TOC title",
+      "title": "full headline",
+      "eyebrow": "Section · detail",
+      "summary": "2-3 digestible sentences",
+      "why_it_matters": "one short sentence",
+      "quote": "optional quote or null",
+      "quote_attribution": "optional attribution or null",
+      "source_notes": "which source(s) + key facts grounding this topic"
+    }
+  ]
+}
+
+Rules:
+- Propose ${Math.min(3, maxTopics)}-${maxTopics} topics (not one per transcript).
+- Split long transcripts; merge related scraps.
+- Drop procedural filler and near-duplicates of recent topics.
+- Keep facts faithful; no invented quotes.
+- Every topic needs source_notes grounding.`;
+
+  const parsed = (await callClaudeJson({
+    apiKey: params.apiKey,
+    userPrompt,
+  })) as { topics?: ProposalTopic[] };
+
+  const topics: ProposalTopic[] = [];
+  for (const raw of parsed.topics ?? []) {
+    if (topics.length >= maxTopics) break;
+    const title = String(raw.title ?? "").trim();
+    if (!title) continue;
+    topics.push({
+      key: randomUUID(),
+      selected: true,
+      toc_title: String(raw.toc_title ?? "").trim() || title.slice(0, 48),
+      title,
+      eyebrow: String(raw.eyebrow ?? "").trim() || "Local",
+      summary: String(raw.summary ?? "").trim(),
+      why_it_matters: String(raw.why_it_matters ?? "").trim(),
+      source_notes: String(raw.source_notes ?? "").trim(),
+      quote: raw.quote ? String(raw.quote).trim() : null,
+      quote_attribution: raw.quote_attribution
+        ? String(raw.quote_attribution).trim()
+        : null,
+    });
+  }
+
+  if (!topics.length) {
+    throw new Error("Claude returned no topics to review");
+  }
+  return topics;
+}
+
 export async function generateIssueFromSources(params: {
   apiKey: string;
   issue: Issue;
   sources: DraftSource[];
   maxTopics?: number;
+  recentTopics?: RecentStoryRef[];
+  /** When accepting a proposal, lock Claude to these approved outlines. */
+  approvedTopics?: ProposalTopic[];
 }): Promise<GeneratedIssueCopy> {
   if (!params.sources.length) {
     throw new Error("No transcripts/sources provided for drafting.");
@@ -110,6 +206,13 @@ export async function generateIssueFromSources(params: {
     transcript: source.content.slice(0, 40_000),
   }));
 
+  const approvedBlock = params.approvedTopics?.length
+    ? `
+Editor-approved topics (write polished copy for THESE in this order; do not invent new topics):
+${JSON.stringify(params.approvedTopics, null, 2)}
+`
+    : "";
+
   const userPrompt = `Refine the raw database transcripts below into digestible newsletter TOPICS, then draft this week's Ebb & Flow email.
 
 Issue date: ${params.issue.issue_date}
@@ -118,6 +221,8 @@ Current subject: ${params.issue.subject}
 
 Raw sources (analyze all of them; do not treat each source as one story):
 ${JSON.stringify(inputs, null, 2)}
+${approvedBlock}
+${recentTopicsBlock(params.recentTopics)}
 
 Return ONLY valid JSON matching this shape:
 {
@@ -141,10 +246,11 @@ Return ONLY valid JSON matching this shape:
 }
 
 Topic refinement rules:
-- Extract ${Math.min(3, maxTopics)}-${maxTopics} digestible TOPICS — not one story per transcript.
+- Extract ${Math.min(3, maxTopics)}-${maxTopics} digestible TOPICS — not one story per transcript${params.approvedTopics?.length ? " (follow the approved list)" : ""}.
 - Split a long transcript into multiple topics when it covers distinct news (votes, schedules, quotes, decisions).
 - Merge tightly related scraps from different sources into one topic when that helps readers.
 - Drop procedural filler (roll call, agenda chrome, "can you hear me") unless it is the news.
+- Skip near-duplicates of recent newsletter topics.
 - Position 1 is the lead — the strongest news for neighbors this week.
 - Keep facts faithful; do not invent votes, names, dates, or quotes.
 - If a quote is not clearly present, set quote and quote_attribution to null.

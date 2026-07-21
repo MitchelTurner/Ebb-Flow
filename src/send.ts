@@ -10,6 +10,7 @@ import {
   recordSend,
 } from "./db.js";
 import { loadTemplate, renderIssueEmail } from "./render.js";
+import { randomUUID } from "node:crypto";
 
 export interface SendResult {
   issueId: string;
@@ -168,4 +169,63 @@ export async function sendNewsletter(config: AppConfig): Promise<SendResult> {
   }
 
   return result;
+}
+
+/** Email a rendered preview to one address without changing issue status. */
+export async function sendPreviewEmail(
+  config: AppConfig,
+  issueId: string,
+  toEmail: string
+): Promise<{ ok: true; providerId: string | null; to: string }> {
+  const email = toEmail.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Enter a valid preview email address.");
+  }
+
+  const issue = await getIssueForSend(config.databaseUrl, issueId);
+  if (!issue) {
+    throw new Error(`Issue not found: ${issueId}`);
+  }
+  const stories = await getStories(config.databaseUrl, issueId);
+  if (!stories.length) {
+    throw new Error("Add stories before sending a preview.");
+  }
+
+  const html = renderIssueEmail({
+    issue,
+    stories,
+    subscriber: {
+      first_name: "editor",
+      unsubscribe_token: "preview",
+    },
+    appUrl: config.appUrl,
+  });
+
+  if (config.dryRun) {
+    console.log(
+      `[dry-run] Would preview-send to ${email} (${html.length} bytes) subject="${issue.subject}"`
+    );
+    return { ok: true, providerId: null, to: email };
+  }
+
+  if (!config.resendApiKey) {
+    throw new Error("RESEND_API_KEY is required to email a preview.");
+  }
+
+  const resend = new Resend(config.resendApiKey);
+  const { data, error } = await resend.emails.send({
+    from: config.fromEmail,
+    to: email,
+    subject: `[Preview] ${issue.subject}`,
+    html,
+    headers: {
+      "X-Ebb-Flow-Preview": randomUUID(),
+    },
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return { ok: true, providerId: data?.id ?? null, to: email };
 }

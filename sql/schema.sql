@@ -140,6 +140,19 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Pending topic proposals (review before Claude writes full copy).
+CREATE TABLE IF NOT EXISTS topic_proposals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'accepted', 'discarded')),
+  sources JSONB NOT NULL DEFAULT '[]',
+  topics JSONB NOT NULL DEFAULT '[]',
+  marine JSONB NOT NULL DEFAULT '{}',
+  issue_id UUID REFERENCES issues(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_subscribers_active ON subscribers (status) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_issues_status_date ON issues (status, issue_date DESC);
 CREATE INDEX IF NOT EXISTS idx_issues_scheduled
@@ -151,3 +164,6 @@ CREATE INDEX IF NOT EXISTS idx_transcripts_unused ON transcripts (recorded_at DE
 CREATE INDEX IF NOT EXISTS idx_source_usage_issue ON source_usage (issue_id);
 CREATE INDEX IF NOT EXISTS idx_sends_issue ON sends (issue_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status, due_date NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_topic_proposals_pending
+  ON topic_proposals (created_at DESC)
+  WHERE status = 'pending';

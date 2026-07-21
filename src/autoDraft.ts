@@ -1,6 +1,7 @@
 import type { AppConfig } from "./config.js";
 import { CLAUDE_MODEL, generateIssueFromSources } from "./claude.js";
 import { createIssue, updateIssue, upsertStory } from "./db.js";
+import { getRecentStoryFingerprints } from "./dedup.js";
 import type { GenerateResult } from "./generate.js";
 import { fetchMarineConditions } from "./marine.js";
 import {
@@ -54,6 +55,7 @@ export async function autoDraftFromNewestFindings(
     high_tides: "",
     low_tides: "",
     high_tide_label: "",
+    as_of: "",
   };
   try {
     marine = await fetchMarineConditions(config, today);
@@ -61,6 +63,8 @@ export async function autoDraftFromNewestFindings(
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`Marine autofill failed (continuing draft): ${message}`);
   }
+
+  const recentTopics = await getRecentStoryFingerprints(config.databaseUrl, 4);
 
   const issue = await createIssue(config.databaseUrl, {
     issue_date: today,
@@ -80,6 +84,7 @@ export async function autoDraftFromNewestFindings(
       issue,
       sources,
       maxTopics,
+      recentTopics,
     });
 
     const updatedIssue = await updateIssue(config.databaseUrl, issue.id, {
