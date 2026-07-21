@@ -60,12 +60,16 @@ function showApp() {
 }
 
 function selectTab(name) {
-  document.querySelectorAll(".tab").forEach((tab) => {
+  document.querySelectorAll(".tab-btn, .tab").forEach((tab) => {
     tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
   });
   document.querySelectorAll("[data-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.getAttribute("data-panel") !== name);
   });
+  document.querySelectorAll(".workflow-step[data-goto-tab]").forEach((step) => {
+    step.classList.toggle("is-active", step.getAttribute("data-goto-tab") === name);
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 async function bootstrap() {
@@ -224,7 +228,7 @@ async function loadProposals() {
               <strong>${escapeHtml(topic.title)}</strong>
               <div class="muted">${escapeHtml(topic.eyebrow || "")}</div>
               <p>${escapeHtml(topic.summary || "")}</p>
-              <details class="grounding"><summary>Source grounding</summary><pre style="white-space:pre-wrap;margin:0.35rem 0 0">${escapeHtml(
+              <details class="grounding"><summary>Source grounding</summary><pre class="grounding-pre">${escapeHtml(
                 topic.source_notes || "—"
               )}</pre></details>
             </div>
@@ -237,7 +241,7 @@ async function loadProposals() {
           marine.high_tides || "—"
         )} / ${escapeHtml(marine.low_tides || "—")}</p>
         ${topics}
-        <div class="row-actions" style="margin-top:0.75rem">
+        <div class="row-actions spaced">
           <button type="button" data-proposal-accept="${proposal.id}">Write selected topics</button>
           <button type="button" class="secondary" data-proposal-discard="${proposal.id}">Discard</button>
         </div>
@@ -429,7 +433,7 @@ async function loadTasks() {
                     <div class="muted">${escapeHtml(task.notes || "")}${
                       task.due_date ? ` · due ${escapeHtml(task.due_date)}` : ""
                     }</div>
-                    <div class="row-actions" style="margin-top:0.45rem">
+                    <div class="row-actions spaced-sm">
                       ${
                         status !== "todo"
                           ? `<button type="button" class="secondary" data-task-status="${task.id}" data-status="todo">To do</button>`
@@ -509,7 +513,7 @@ async function loadStories(issueId) {
             }
             ${
               story.source_notes
-                ? `<details class="grounding" open><summary>Source grounding</summary><pre style="white-space:pre-wrap;margin:0.35rem 0 0">${escapeHtml(
+                ? `<details class="grounding" open><summary>Source grounding</summary><pre class="grounding-pre">${escapeHtml(
                     story.source_notes
                   )}</pre></details>`
                 : `<p class="muted">No source grounding on this story.</p>`
@@ -583,8 +587,22 @@ document.getElementById("logout-btn")?.addEventListener("click", async () => {
   showLogin();
 });
 
-document.querySelectorAll(".tab").forEach((tab) => {
+document.querySelectorAll(".tab-btn, .tab").forEach((tab) => {
   tab.addEventListener("click", () => selectTab(tab.dataset.tab));
+});
+
+document.querySelectorAll("[data-goto-tab]").forEach((el) => {
+  const go = () => {
+    const name = el.getAttribute("data-goto-tab");
+    if (name) selectTab(name);
+  };
+  el.addEventListener("click", go);
+  el.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      go();
+    }
+  });
 });
 
 document.getElementById("add-subscriber-form")?.addEventListener("submit", async (event) => {
@@ -978,7 +996,7 @@ function renderFactReview(result) {
     ${findingHtml}
     ${
       !result.ok && result.corrected && !result.applied
-        ? `<div class="row-actions" style="margin-top:0.75rem">
+        ? `<div class="row-actions spaced">
             <button type="button" id="fact-review-apply-btn">Apply corrections</button>
           </div>`
         : ""

@@ -20,7 +20,7 @@
         Admin password
         <input type="password" name="password" autocomplete="current-password" required>
       </label>
-      <div style="margin-top:0.85rem">
+      <div class="login-actions">
         <button type="submit">Sign in</button>
       </div>
       <p class="flash" id="login-flash" role="status"></p>
@@ -29,16 +29,16 @@
 
   <div id="app-view" class="shell hidden">
     <header class="topbar">
-      <h1 class="brand">The Ebb &amp; Flow <small>Newsroom · live</small></h1>
+      <h1 class="brand">The Ebb &amp; Flow <small>Newsroom</small></h1>
       <div class="topbar-actions">
-        <a class="btn secondary" href="/" target="_blank" rel="noopener">Public</a>
+        <a class="btn secondary" href="/" target="_blank" rel="noopener">Public site</a>
         <button type="button" class="secondary" id="logout-btn">Log out</button>
       </div>
     </header>
 
     <nav class="tabs" role="tablist" aria-label="Admin sections">
       <button class="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
-      <button class="tab" type="button" data-tab="review" aria-selected="false">Review &amp; schedule</button>
+      <button class="tab" type="button" data-tab="review" aria-selected="false">Review</button>
       <button class="tab" type="button" data-tab="transcripts" aria-selected="false">Transcripts</button>
       <button class="tab" type="button" data-tab="findings" aria-selected="false">Findings</button>
       <button class="tab" type="button" data-tab="subscribers" aria-selected="false">Subscribers</button>
@@ -46,73 +46,118 @@
       <button class="tab" type="button" data-tab="tasks" aria-selected="false">Tasks</button>
     </nav>
 
-    <p class="flash" id="app-flash" role="status"></p>
+    <p class="flash toast" id="app-flash" role="status"></p>
 
     <section id="panel-overview" class="panel" data-panel="overview">
+      <div class="hero-block">
+        <p class="eyebrow">This week</p>
+        <h2 class="hero-title">Turn transcripts into a sendable issue</h2>
+        <p class="lede">Propose topics, write the draft, fact-check against the web, then schedule.</p>
+      </div>
+
+      <ol class="workflow" aria-label="Publishing workflow">
+        <li class="workflow-step" data-goto-tab="review" role="button" tabindex="0">
+          <span>1</span><strong>Propose</strong><em>Topics from transcripts</em>
+        </li>
+        <li class="workflow-step" data-goto-tab="issues" role="button" tabindex="0">
+          <span>2</span><strong>Write</strong><em>Selected stories + marine strip</em>
+        </li>
+        <li class="workflow-step" data-goto-tab="issues" role="button" tabindex="0">
+          <span>3</span><strong>Check</strong><em>AI fact-check + checklist</em>
+        </li>
+        <li class="workflow-step" data-goto-tab="review" role="button" tabindex="0">
+          <span>4</span><strong>Schedule</strong><em>Approve delivery time</em>
+        </li>
+      </ol>
+
       <div class="stats" id="stats"></div>
-      <p class="muted">Propose topics from transcripts for review, then write the draft. Weather &amp; tides autofill for Ketchikan.</p>
-      <div class="toolbar" style="margin-top:1rem; display:flex; flex-wrap:wrap; gap:0.5rem">
+
+      <div class="action-bar">
         <button type="button" id="overview-propose-btn">Propose topics</button>
-        <button type="button" class="secondary" id="overview-auto-draft-btn">Quick draft (skip review)</button>
+        <button type="button" class="secondary" id="overview-auto-draft-btn">Quick draft</button>
+        <button type="button" class="secondary" data-goto-tab="review">Go to review</button>
       </div>
     </section>
 
     <section id="panel-review" class="panel hidden" data-panel="review">
       <div class="section-head">
-        <h2>Review &amp; schedule</h2>
-        <div style="display:flex; flex-wrap:wrap; gap:0.5rem">
+        <div>
+          <p class="eyebrow">Desk</p>
+          <h2>Review &amp; schedule</h2>
+        </div>
+        <div class="action-bar compact">
           <button type="button" id="review-propose-btn">Propose topics</button>
           <button type="button" class="secondary" id="review-auto-draft-btn">Quick draft</button>
         </div>
       </div>
 
-      <h3 style="margin-top:1rem">Topic proposals</h3>
-      <p class="muted">Select topics to keep, then write the full draft. Near-duplicates of recent issues are filtered when proposing.</p>
-      <div id="proposals-list" class="proposals-list"></div>
-
-      <h3 style="margin-top:1.5rem">Drafts</h3>
-      <p class="muted">Claude drafts stay in <strong>draft</strong> until the checklist passes and you schedule delivery.</p>
-      <div style="overflow:auto">
-        <table>
-          <thead>
-            <tr><th>Subject</th><th>Status</th><th>Checklist</th><th>Scheduled</th><th>Actions</th></tr>
-          </thead>
-          <tbody id="review-body"></tbody>
-        </table>
+      <div class="stack-block">
+        <div class="block-head">
+          <h3>Topic proposals</h3>
+          <p class="muted">Select topics to keep, then write the full draft. Near-duplicates of recent issues are filtered.</p>
+        </div>
+        <div id="proposals-list" class="proposals-list"></div>
       </div>
-      <div id="checklist-panel" class="checklist-panel muted" style="margin-top:0.75rem"></div>
-      <form id="schedule-form" class="grid-form cols-3" style="margin-top:1rem">
-        <input type="hidden" name="issue_id">
-        <label>Issue to schedule
-          <select name="issue_select" id="schedule-issue-select"></select>
-        </label>
-        <label>Deliver at
-          <input type="datetime-local" name="scheduled_for" required>
-        </label>
-        <label>&nbsp;<button type="submit">Approve &amp; schedule</button></label>
-        <label class="cols-span" style="display:flex; align-items:center; gap:0.5rem">
-          <input type="checkbox" name="force" id="schedule-force">
-          Force schedule even if checklist incomplete
-        </label>
-      </form>
+
+      <div class="stack-block">
+        <div class="block-head">
+          <h3>Draft queue</h3>
+          <p class="muted">Stay in <strong>draft</strong> until the checklist passes and you schedule delivery.</p>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Subject</th><th>Status</th><th>Checklist</th><th>Scheduled</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="review-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="stack-block schedule-block">
+        <div class="block-head">
+          <h3>Approve &amp; schedule</h3>
+          <p class="muted">Pick a draft, confirm the checklist, set delivery time.</p>
+        </div>
+        <div id="checklist-panel" class="checklist-panel muted"></div>
+        <form id="schedule-form" class="grid-form cols-3">
+          <input type="hidden" name="issue_id">
+          <label>Issue to schedule
+            <select name="issue_select" id="schedule-issue-select"></select>
+          </label>
+          <label>Deliver at
+            <input type="datetime-local" name="scheduled_for" required>
+          </label>
+          <label class="align-end"><span class="sr-only">Submit</span>
+            <button type="submit">Approve &amp; schedule</button>
+          </label>
+          <label class="check-row cols-span">
+            <input type="checkbox" name="force" id="schedule-force">
+            <span>Force schedule even if checklist incomplete</span>
+          </label>
+        </form>
+      </div>
     </section>
 
     <section id="panel-transcripts" class="panel hidden" data-panel="transcripts">
       <div class="section-head">
-        <h2>Transcripts</h2>
+        <div>
+          <p class="eyebrow">Sources</p>
+          <h2>Transcripts</h2>
+        </div>
       </div>
-      <p class="muted">Paste meeting / interview transcripts here (or insert into the <code>transcripts</code> table). Claude analyzes unused newest rows when drafting the email template.</p>
-      <form id="transcript-form" class="grid-form cols-2">
+      <p class="muted">Paste meeting or interview text. Unused newest rows feed topic proposals and drafts.</p>
+      <form id="transcript-form" class="grid-form cols-2 surface">
         <label>Title <input name="title" placeholder="Optional short label"></label>
         <label>Source <input name="source" placeholder="City Council · July 14"></label>
-        <label style="grid-column:1/-1">Transcript
+        <label class="cols-span">Transcript
           <textarea name="content" required placeholder="Full transcript text Claude should analyze…"></textarea>
         </label>
         <label>Speaker <input name="speaker" placeholder="Optional"></label>
         <label>Recorded at <input type="datetime-local" name="recorded_at"></label>
-        <div><button type="submit">Add transcript</button></div>
+        <div class="align-end"><button type="submit">Add transcript</button></div>
       </form>
-      <div style="overflow:auto; margin-top:1rem">
+      <div class="table-scroll">
         <table>
           <thead>
             <tr><th>When</th><th>Transcript</th><th>Used?</th><th></th></tr>
@@ -124,20 +169,23 @@
 
     <section id="panel-findings" class="panel hidden" data-panel="findings">
       <div class="section-head">
-        <h2>Findings</h2>
+        <div>
+          <p class="eyebrow">Sources</p>
+          <h2>Findings</h2>
+        </div>
       </div>
-      <p class="muted">Short tip-style updates. Used as a fallback when no unused transcripts are available.</p>
-      <form id="finding-form" class="grid-form cols-2">
+      <p class="muted">Short tip-style updates. Fallback when no unused transcripts are available.</p>
+      <form id="finding-form" class="grid-form cols-2 surface">
         <label>Title <input name="title" placeholder="Optional short label"></label>
         <label>Category <input name="category" placeholder="Local Government"></label>
-        <label style="grid-column:1/-1">Finding / update
-          <textarea name="body" required placeholder="Council voted 4–3 on the budget… quote from Mayor Reyes…"></textarea>
+        <label class="cols-span">Finding / update
+          <textarea name="body" required placeholder="Council voted 4–3 on the budget…"></textarea>
         </label>
         <label>Source URL <input name="source_url" placeholder="https://…"></label>
         <label>Found at <input type="datetime-local" name="found_at"></label>
-        <div><button type="submit">Add finding</button></div>
+        <div class="align-end"><button type="submit">Add finding</button></div>
       </form>
-      <div style="overflow:auto; margin-top:1rem">
+      <div class="table-scroll">
         <table>
           <thead>
             <tr><th>When</th><th>Finding</th><th>Used?</th><th></th></tr>
@@ -149,14 +197,17 @@
 
     <section id="panel-subscribers" class="panel hidden" data-panel="subscribers">
       <div class="section-head">
-        <h2>Subscribers</h2>
+        <div>
+          <p class="eyebrow">Audience</p>
+          <h2>Subscribers</h2>
+        </div>
       </div>
-      <form class="toolbar grid-form cols-3" id="add-subscriber-form">
+      <form class="grid-form cols-3 surface" id="add-subscriber-form">
         <label>First name <input name="first_name" placeholder="Alex"></label>
         <label>Email <input name="email" type="email" required placeholder="alex@example.com"></label>
-        <label>&nbsp;<button type="submit">Add subscriber</button></label>
+        <label class="align-end"><span class="sr-only">Add</span><button type="submit">Add subscriber</button></label>
       </form>
-      <div style="overflow:auto">
+      <div class="table-scroll">
         <table>
           <thead>
             <tr><th>Name</th><th>Email</th><th>Status</th><th>Actions</th></tr>
@@ -168,10 +219,13 @@
 
     <section id="panel-issues" class="panel hidden" data-panel="issues">
       <div class="section-head">
-        <h2>Email issues</h2>
+        <div>
+          <p class="eyebrow">Production</p>
+          <h2>Email issues</h2>
+        </div>
         <button type="button" id="new-issue-btn">New issue</button>
       </div>
-      <div style="overflow:auto">
+      <div class="table-scroll">
         <table>
           <thead>
             <tr><th>Date</th><th>Subject</th><th>Status</th><th>Actions</th></tr>
@@ -181,98 +235,135 @@
       </div>
 
       <div id="issue-editor" class="issue-editor hidden">
-        <div class="section-head">
-          <h2 id="issue-editor-title">Edit issue</h2>
+        <div class="section-head sticky-editor-head">
+          <div>
+            <p class="eyebrow">Editing</p>
+            <h2 id="issue-editor-title">Edit issue</h2>
+          </div>
           <a class="btn secondary" id="preview-link" href="#" target="_blank" rel="noopener">Preview</a>
         </div>
-        <form id="issue-form" class="grid-form cols-2">
+
+        <form id="issue-form" class="issue-form">
           <input type="hidden" name="id">
-          <label>Issue date <input type="date" name="issue_date" required></label>
-          <label>Status
-            <select name="status">
-              <option value="draft">draft</option>
-              <option value="ready">ready</option>
-              <option value="sending">sending</option>
-              <option value="sent">sent</option>
-            </select>
-          </label>
-          <label>Subject <input name="subject" required></label>
-          <label>Volume label <input name="volume_label" placeholder="Vol. 4, No. 29"></label>
-          <label class="cols-span">Preheader <input name="preheader"></label>
-          <label style="grid-column:1/-1">Intro <textarea name="intro"></textarea></label>
-          <label>Weather <input name="weather" placeholder="54°F · Light Rain"></label>
-          <label>High tides <input name="high_tides" placeholder="6:12a · 5:48p"></label>
-          <label>Low tides <input name="low_tides" placeholder="12:03p · 11:41p"></label>
-          <label>High tide label <input name="high_tide_label" placeholder="High tide 6:12 a.m."></label>
-          <label>CTA URL <input name="cta_url"></label>
-          <label>CTA label <input name="cta_label"></label>
-          <label style="grid-column:1/-1">Coming up (one per line) <textarea name="coming_up"></textarea></label>
-          <label>Tip headline <input name="tip_headline"></label>
-          <label>Postal address <input name="postal_address"></label>
-          <label style="grid-column:1/-1">Tip body <textarea name="tip_body"></textarea></label>
-          <label>Scheduled for
-            <input type="datetime-local" name="scheduled_for_display" disabled>
-          </label>
-          <div style="grid-column:1/-1; display:flex; gap:0.5rem; flex-wrap:wrap">
-            <button type="submit">Save issue</button>
-            <button type="button" class="secondary" id="generate-claude-btn">Rewrite with Claude</button>
-            <button type="button" class="secondary" id="fact-review-btn">AI fact-check (web)</button>
-            <button type="button" class="secondary" id="autofill-marine-btn">Autofill weather &amp; tides</button>
-            <button type="button" class="secondary" id="send-dry-btn">Dry-run send</button>
-            <button type="button" id="send-live-btn">Send now</button>
+
+          <div class="field-group">
+            <h3>Basics</h3>
+            <div class="grid-form cols-2">
+              <label>Issue date <input type="date" name="issue_date" required></label>
+              <label>Status
+                <select name="status">
+                  <option value="draft">draft</option>
+                  <option value="ready">ready</option>
+                  <option value="sending">sending</option>
+                  <option value="sent">sent</option>
+                </select>
+              </label>
+              <label>Subject <input name="subject" required></label>
+              <label>Volume label <input name="volume_label" placeholder="Vol. 4, No. 29"></label>
+              <label class="cols-span">Preheader <input name="preheader"></label>
+              <label class="cols-span">Intro <textarea name="intro"></textarea></label>
+            </div>
           </div>
-          <div id="fact-review-panel" class="fact-review-panel muted" style="grid-column:1/-1"></div>
-          <div class="grid-form cols-2" style="grid-column:1/-1; margin-top:0.5rem">
+
+          <div class="field-group">
+            <h3>Marine strip</h3>
+            <div class="grid-form cols-2">
+              <label>Weather <input name="weather" placeholder="54°F · Light Rain"></label>
+              <label>High tide label <input name="high_tide_label" placeholder="High tide 6:12 a.m."></label>
+              <label>High tides <input name="high_tides" placeholder="6:12a · 5:48p"></label>
+              <label>Low tides <input name="low_tides" placeholder="12:03p · 11:41p"></label>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <h3>Footer &amp; CTA</h3>
+            <div class="grid-form cols-2">
+              <label>CTA URL <input name="cta_url"></label>
+              <label>CTA label <input name="cta_label"></label>
+              <label class="cols-span">Coming up (one per line) <textarea name="coming_up"></textarea></label>
+              <label>Tip headline <input name="tip_headline"></label>
+              <label>Postal address <input name="postal_address"></label>
+              <label class="cols-span">Tip body <textarea name="tip_body"></textarea></label>
+              <label>Scheduled for
+                <input type="datetime-local" name="scheduled_for_display" disabled>
+              </label>
+            </div>
+          </div>
+
+          <div class="editor-actions" id="editor-actions">
+            <div class="action-cluster">
+              <span class="cluster-label">Draft</span>
+              <button type="submit">Save</button>
+              <button type="button" class="secondary" id="generate-claude-btn">Rewrite</button>
+              <button type="button" class="secondary" id="autofill-marine-btn">Weather &amp; tides</button>
+            </div>
+            <div class="action-cluster">
+              <span class="cluster-label">Check</span>
+              <button type="button" class="secondary" id="fact-review-btn">AI fact-check</button>
+            </div>
+            <div class="action-cluster">
+              <span class="cluster-label">Send</span>
+              <button type="button" class="secondary" id="send-dry-btn">Dry-run</button>
+              <button type="button" id="send-live-btn">Send now</button>
+            </div>
+          </div>
+
+          <div id="fact-review-panel" class="fact-review-panel muted"></div>
+
+          <div class="preview-email surface">
             <label>Email me a preview
               <input type="email" id="preview-email-input" placeholder="you@example.com">
             </label>
-            <label>&nbsp;
-              <button type="button" class="secondary" id="preview-email-btn">Send preview to me</button>
-            </label>
+            <button type="button" class="secondary" id="preview-email-btn">Send preview</button>
           </div>
         </form>
 
-        <div class="section-head" style="margin-top:1.5rem">
-          <h2>Stories</h2>
-        </div>
-        <p class="muted">Auto-draft refines transcripts into digestible topics. Or paste notes here and click <strong>Rewrite with Claude</strong>. Use <strong>Autofill weather &amp; tides</strong> for the marine strip.</p>
-        <form id="story-form" class="grid-form cols-2">
-          <input type="hidden" name="id">
-          <label>Position
-            <select name="position">
-              <option value="1">1 · Lead</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-              <option value="6">6</option>
-            </select>
-          </label>
-          <label>Eyebrow <input name="eyebrow" placeholder="Lead Story · Local Government"></label>
-          <label style="grid-column:1/-1">Source notes (for Claude)
-            <textarea name="source_notes" placeholder="Council voted 4–3 on $14M budget… residents packed chamber… Mayor Reyes quote about library…"></textarea>
-          </label>
-          <label>TOC title <input name="toc_title" placeholder="Short TOC line"></label>
-          <label>Title <input name="title" placeholder="Full headline (optional before Claude)"></label>
-          <label style="grid-column:1/-1">Summary <textarea name="summary"></textarea></label>
-          <label style="grid-column:1/-1">Why it matters <input name="why_it_matters"></label>
-          <label>URL <input name="url"></label>
-          <label>Image URL (lead) <input name="image_url"></label>
-          <label>Quote <input name="quote"></label>
-          <label>Quote attribution <input name="quote_attribution"></label>
-          <div style="grid-column:1/-1">
-            <button type="submit">Save story</button>
+        <div class="stack-block">
+          <div class="block-head">
+            <h3>Stories</h3>
+            <p class="muted">Paste source notes, save, then rewrite or fact-check. Grounding notes stay attached to each story.</p>
           </div>
-        </form>
-        <div class="story-list" id="stories-list"></div>
+          <form id="story-form" class="grid-form cols-2 surface">
+            <input type="hidden" name="id">
+            <label>Position
+              <select name="position">
+                <option value="1">1 · Lead</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+              </select>
+            </label>
+            <label>Eyebrow <input name="eyebrow" placeholder="Lead Story · Local Government"></label>
+            <label class="cols-span">Source notes (for Claude)
+              <textarea name="source_notes" placeholder="Council voted 4–3… Mayor Reyes quote…"></textarea>
+            </label>
+            <label>TOC title <input name="toc_title" placeholder="Short TOC line"></label>
+            <label>Title <input name="title" placeholder="Full headline"></label>
+            <label class="cols-span">Summary <textarea name="summary"></textarea></label>
+            <label class="cols-span">Why it matters <input name="why_it_matters"></label>
+            <label>URL <input name="url"></label>
+            <label>Image URL (lead) <input name="image_url"></label>
+            <label>Quote <input name="quote"></label>
+            <label>Quote attribution <input name="quote_attribution"></label>
+            <div class="cols-span align-end">
+              <button type="submit">Save story</button>
+            </div>
+          </form>
+          <div class="story-list" id="stories-list"></div>
+        </div>
       </div>
     </section>
 
     <section id="panel-tasks" class="panel hidden" data-panel="tasks">
       <div class="section-head">
-        <h2>Tasks</h2>
+        <div>
+          <p class="eyebrow">Desk</p>
+          <h2>Tasks</h2>
+        </div>
       </div>
-      <form id="task-form" class="grid-form cols-3">
+      <form id="task-form" class="grid-form cols-3 surface">
         <label>Title <input name="title" required placeholder="Write lead story"></label>
         <label>Due date <input type="date" name="due_date"></label>
         <label>Status
@@ -282,8 +373,8 @@
             <option value="done">done</option>
           </select>
         </label>
-        <label style="grid-column:1/-1">Notes <textarea name="notes" placeholder="Optional details"></textarea></label>
-        <div><button type="submit">Add task</button></div>
+        <label class="cols-span">Notes <textarea name="notes" placeholder="Optional details"></textarea></label>
+        <div class="align-end"><button type="submit">Add task</button></div>
       </form>
       <div class="task-board" id="task-board"></div>
     </section>
