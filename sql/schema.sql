@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS issues (
   high_tide_label TEXT NOT NULL DEFAULT '',
   coming_up TEXT[] NOT NULL DEFAULT '{}',
   cta_url TEXT NOT NULL DEFAULT '',
-  cta_label TEXT NOT NULL DEFAULT 'Read the full stories →',
+  cta_label TEXT NOT NULL DEFAULT '',
   tip_headline TEXT NOT NULL DEFAULT 'Got a tip or a story we missed?',
   tip_body TEXT NOT NULL DEFAULT 'Just hit reply — every message reaches the newsroom directly.',
   postal_address TEXT NOT NULL DEFAULT '',

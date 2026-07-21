@@ -581,7 +581,7 @@ function blankIssue() {
     high_tide_label: "",
     coming_up: [],
     cta_url: "",
-    cta_label: "Read the full stories →",
+    cta_label: "",
     tip_headline: "Got a tip or a story we missed?",
     tip_body: "Just hit reply — every message reaches the newsroom directly.",
     postal_address: "",

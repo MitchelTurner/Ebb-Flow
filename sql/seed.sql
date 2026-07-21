@@ -31,7 +31,7 @@ INSERT INTO issues (
     'School board''s vote on the new bus schedule'
   ],
   'https://example.com',
-  'Read the full stories →',
+  '',
   'Got a tip or a story we missed?',
   'Just hit reply — every message reaches the newsroom directly.',
   '123 Main Street, Suite 4 · Your Town, ST 00000',

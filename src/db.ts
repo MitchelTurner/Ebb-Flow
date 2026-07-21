@@ -285,7 +285,7 @@ export async function createIssue(
       input.high_tide_label ?? "",
       comingUp,
       input.cta_url ?? "",
-      input.cta_label ?? "Read the full stories →",
+      input.cta_label ?? "",
       input.tip_headline ?? "Got a tip or a story we missed?",
       input.tip_body ?? "Just hit reply — every message reaches the newsroom directly.",
       input.postal_address ?? "",
