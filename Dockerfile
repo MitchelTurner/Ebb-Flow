@@ -10,6 +10,7 @@ COPY src ./src
 COPY sql ./sql
 COPY templates ./templates
 COPY public ./public
+COPY scripts ./scripts
 
 RUN npm run build && npm prune --omit=dev
 

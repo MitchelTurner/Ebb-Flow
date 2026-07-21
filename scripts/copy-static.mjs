@@ -1,7 +1,11 @@
 import { cpSync, existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = process.cwd();
+// Prefer package root next to this script; fall back to cwd (npm run build).
+const root = existsSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"))
+  ? join(dirname(fileURLToPath(import.meta.url)), "..")
+  : process.cwd();
 const dist = join(root, "dist");
 
 mkdirSync(dist, { recursive: true });
