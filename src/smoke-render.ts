@@ -76,6 +76,7 @@ assert.match(html, /Story 1 title/);
 assert.match(html, /unsubscribe\/tok/);
 assert.match(html, /Update preferences/);
 assert.match(html, /\/brand\/logo\.png/);
+assert.match(html, /width="128"/);
 assert.match(html, /01 &nbsp;Story 1 toc/);
 assert.match(
   renderIssueEmail({

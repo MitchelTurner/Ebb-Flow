@@ -48,7 +48,16 @@ export function brandPage(params: {
       margin: 0 auto;
       padding: clamp(2.5rem, 8vw, 4.5rem) 1.5rem 3rem;
     }
-    .mark { display:block; width:4.5rem; height:auto; margin:0 0 1.25rem; }
+    .mark {
+      display:block;
+      width:clamp(6.5rem, 22vw, 8.5rem);
+      height:auto;
+      margin:0 0 1.5rem;
+      object-fit:contain;
+      filter:
+        drop-shadow(0 0 16px rgba(196, 161, 95, 0.28))
+        drop-shadow(0 12px 24px rgba(0, 0, 0, 0.35));
+    }
     .eyebrow {
       margin: 0 0 0.75rem;
       font-size: 0.72rem;
@@ -97,7 +106,7 @@ export function brandPage(params: {
 </head>
 <body>
   <main>
-    <img class="mark" src="/brand/logo.png" width="72" height="72" alt="The Ebb &amp; Flow">
+    <img class="mark" src="/brand/logo.png" width="136" height="136" alt="The Ebb &amp; Flow">
     <p class="eyebrow">${escape(eyebrow)}</p>
     <h1>${escape(params.title)}</h1>
     ${params.body}

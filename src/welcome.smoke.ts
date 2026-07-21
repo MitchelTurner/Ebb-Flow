@@ -27,5 +27,8 @@ if (!html.includes("Subscription confirmed")) {
 if (!html.includes("/brand/logo.png") && !html.includes("cid:")) {
   throw new Error("missing logo url");
 }
+if (!html.includes('width="112"')) {
+  throw new Error("welcome logo should be larger (112px)");
+}
 
 console.log("welcome.smoke ok");
