@@ -2,7 +2,7 @@ import express from "express";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { resolveBrandFile, resolvePublicDir } from "./assetPaths.js";
-import { BRAND_LOGO_LIGHT_PNG, BRAND_LOGO_LIGHT_SVG } from "./brandAssets.js";
+import { BRAND_LOGO_FILE } from "./brandAssets.js";
 import { createApiRouter } from "./api.js";
 import type { AppConfig } from "./config.js";
 import {
@@ -34,8 +34,7 @@ export function createServer(config: AppConfig) {
       service: "ebb-flow-newsletter",
       publicDir,
       publicDirExists: existsSync(publicDir),
-      brandLogoSvg: Boolean(resolveBrandFile(BRAND_LOGO_LIGHT_SVG)),
-      brandLogoPng: Boolean(resolveBrandFile(BRAND_LOGO_LIGHT_PNG)),
+      brandLogo: Boolean(resolveBrandFile(BRAND_LOGO_FILE)),
       aiKeyConfigured: Boolean(config.anthropicApiKey),
     });
   });

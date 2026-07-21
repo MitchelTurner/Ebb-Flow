@@ -4,9 +4,8 @@ import { resolveBrandFile } from "./assetPaths.js";
 /** CID used for Resend inline logo attachments. */
 export const BRAND_LOGO_CID = "ebb-flow-logo";
 
-/** Light mark (cream) for navy / dark mastheads. */
-export const BRAND_LOGO_LIGHT_PNG = "logo-mark-light-128.png";
-export const BRAND_LOGO_LIGHT_SVG = "logo-mark-light.svg";
+/** Single source logo — drop your file at public/brand/logo.png */
+export const BRAND_LOGO_FILE = "logo.png";
 
 export type LogoDelivery = "hosted" | "cid" | "relative";
 
@@ -15,8 +14,8 @@ export function brandLogoUrl(
   appUrl: string
 ): string {
   if (delivery === "cid") return `cid:${BRAND_LOGO_CID}`;
-  if (delivery === "relative") return `/brand/${BRAND_LOGO_LIGHT_PNG}`;
-  return `${appUrl.replace(/\/$/, "")}/brand/${BRAND_LOGO_LIGHT_PNG}`;
+  if (delivery === "relative") return `/brand/${BRAND_LOGO_FILE}`;
+  return `${appUrl.replace(/\/$/, "")}/brand/${BRAND_LOGO_FILE}`;
 }
 
 export function loadBrandLogoPng(): {
@@ -25,10 +24,10 @@ export function loadBrandLogoPng(): {
   contentType: "image/png";
   contentId: string;
 } | null {
-  const path = resolveBrandFile(BRAND_LOGO_LIGHT_PNG);
+  const path = resolveBrandFile(BRAND_LOGO_FILE);
   if (!path) return null;
   return {
-    filename: BRAND_LOGO_LIGHT_PNG,
+    filename: BRAND_LOGO_FILE,
     content: readFileSync(path),
     contentType: "image/png",
     contentId: BRAND_LOGO_CID,

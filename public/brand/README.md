@@ -1,18 +1,16 @@
-# Brand marks
+# Brand logo
 
-Quill + paper-boat mark for The Ebb & Flow (gold on transparent / navy on transparent).
+Drop your logo here as:
 
-| File | Use on |
-|------|--------|
-| `logo-mark-light.svg` / `logo-mark-light-*.png` | Dark / navy surfaces (email masthead, public hero, admin) — **gold** |
-| `logo-mark-dark.svg` / `logo-mark-dark-*.png` | Light / cream surfaces — **navy** |
-| `logo-quill-*.svg` | Same mark (alias) |
-| `favicon-32.png` / `apple-touch-icon.png` | Browser icons |
+```
+public/brand/logo.png
+```
 
-All marks have **no background** (transparent).
+That single file is used for:
 
-**Email:** masthead logo is embedded inline (`cid:ebb-flow-logo`) from `logo-mark-light-128.png`.
+- Public site (`/`)
+- Admin
+- Email masthead (inline CID)
+- Favicon / apple-touch icon
 
-**Site / admin:** `/brand/logo-mark-light.svg` on dark UI.
-
-To swap in exact original artwork: replace these files (same names) and redeploy.
+Prefer a **transparent PNG** (no background). No other logo filenames are required.

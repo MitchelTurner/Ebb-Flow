@@ -74,7 +74,7 @@ const html = renderIssueEmail({
 assert.match(html, /Good morning, Alex\./);
 assert.match(html, /Story 1 title/);
 assert.match(html, /unsubscribe\/tok/);
-assert.match(html, /\/brand\/logo-mark-light-128\.png/);
+assert.match(html, /\/brand\/logo\.png/);
 assert.match(
   renderIssueEmail({
     issue,
@@ -93,7 +93,7 @@ assert.match(
     appUrl: "http://localhost:3000",
     logoDelivery: "relative",
   }),
-  /src="\/brand\/logo-mark-light-128\.png"/
+  /src="\/brand\/logo\.png"/
 );
 assert.match(html, /A memorable quote/);
 assert.match(html, /placehold\.co/);
@@ -123,7 +123,7 @@ const bareHtml = renderIssueEmail({
   subscriber: { first_name: "Alex", unsubscribe_token: "tok" },
   appUrl: "http://localhost:3000",
 });
-assert.match(bareHtml, /\/brand\/logo-mark-light-128\.png/);
+assert.match(bareHtml, /\/brand\/logo\.png/);
 assert.doesNotMatch(bareHtml, /placehold\.co/);
 assert.doesNotMatch(bareHtml, /memorable quote/i);
 assert.doesNotMatch(bareHtml, /border-left:3px solid #b8975a/);
